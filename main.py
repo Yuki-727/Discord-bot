@@ -11,8 +11,9 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 
 @bot.event
 async def on_ready():
-    print(f"Logged in as {bot.user.name} ({bot.user.id})")
-    print("------")
+    print(f"YUKI-BOT VERSION 2.1 STARTING", flush=True)
+    print(f"Logged in as {bot.user.name} ({bot.user.id})", flush=True)
+    print("------", flush=True)
     try:
         # Sync slash commands
         synced = await bot.tree.sync()
