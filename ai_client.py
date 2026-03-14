@@ -1,0 +1,40 @@
+import httpx
+import config
+
+class AIClient:
+    def __init__(self):
+        self.api_key = config.AI_API_KEY
+        self.base_url = config.AI_API_BASE_URL
+        self.model = config.AI_MODEL
+
+    async def generate_response(self, messages: list) -> str:
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "model": self.model,
+            "messages": messages
+        }
+
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            try:
+                response = await client.post(
+                    f"{self.base_url}/chat/completions",
+                    headers=headers,
+                    json=payload
+                )
+                response.raise_for_status()
+                data = response.json()
+                
+                if "choices" in data and len(data["choices"]) > 0:
+                    return data["choices"][0]["message"]["content"]
+                else:
+                    return "Error: Received an empty or unexpected response from the AI API."
+            
+            except httpx.TimeoutException:
+                return "Error: The request to the AI API timed out. Please try again later."
+            except httpx.HTTPStatusError as e:
+                return f"Error: API returned an HTTP error status: {e.response.status_code}"
+            except Exception as e:
+                return f"Error: An unexpected error occurred: {str(e)}"
