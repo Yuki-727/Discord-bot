@@ -35,6 +35,8 @@ class AIClient:
             except httpx.TimeoutException:
                 return "Error: The request to the AI API timed out. Please try again later."
             except httpx.HTTPStatusError as e:
-                return f"Error: API returned an HTTP error status: {e.response.status_code}"
+                error_detail = e.response.text
+                print(f"API Error ({e.response.status_code}): {error_detail}")
+                return f"Error: API returned an HTTP error status: {e.response.status_code}. Detail: {error_detail[:100]}"
             except Exception as e:
                 return f"Error: An unexpected error occurred: {str(e)}"
