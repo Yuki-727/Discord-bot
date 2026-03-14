@@ -11,10 +11,8 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 
 @bot.event
 async def on_ready():
-    print(f"------------------------------------------", flush=True)
-    print(f"--- YUKI-BOT VERSION 2.2 SYSTEM START ---", flush=True)
-    print(f"------------------------------------------", flush=True)
-    print(f"Logged in as {bot.user.name} ({bot.user.id})", flush=True)
+    print(f"✅ Yuki-bot is online!")
+    print(f"Logged in as: {bot.user.name} ({bot.user.id})")
     print("------", flush=True)
     try:
         # Sync slash commands

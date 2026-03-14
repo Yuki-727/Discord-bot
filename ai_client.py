@@ -9,15 +9,12 @@ class AIClient:
 
     async def generate_response(self, messages: list) -> str:
         if not self.api_key:
-            print("ERROR: AI_API_KEY is missing in AIClient!", flush=True)
-            return "Error: AI_API_KEY is missing. Please check your Railway environment variables."
+            return "❌ Error: AI_API_KEY is missing. Check Railway variables."
             
-        # Clean the key: remove whitespace, quotes, and 'Bearer ' if already present
+        # Clean the key for safety
         api_key_clean = self.api_key.strip().strip('"').strip("'")
         if api_key_clean.lower().startswith("bearer "):
             api_key_clean = api_key_clean[7:].strip()
-
-        print(f"DEBUG_V2: Key length={len(api_key_clean)}, Model={self.model}, BaseURL={self.base_url}", flush=True)
         
         headers = {
             "Authorization": f"Bearer {api_key_clean}",
