@@ -8,8 +8,13 @@ class AIClient:
         self.model = config.AI_MODEL
 
     async def generate_response(self, messages: list) -> str:
+        # Clean the key: remove whitespace and 'Bearer ' if already present
+        api_key_clean = self.api_key.strip()
+        if api_key_clean.lower().startswith("bearer "):
+            api_key_clean = api_key_clean[7:].strip()
+
         headers = {
-            "Authorization": f"Bearer {self.api_key}",
+            "Authorization": f"Bearer {api_key_clean}",
             "Content-Type": "application/json"
         }
         payload = {
