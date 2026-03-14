@@ -11,7 +11,9 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 
 @bot.event
 async def on_ready():
-    print(f"YUKI-BOT VERSION 2.1 STARTING", flush=True)
+    print(f"------------------------------------------", flush=True)
+    print(f"--- YUKI-BOT VERSION 2.2 SYSTEM START ---", flush=True)
+    print(f"------------------------------------------", flush=True)
     print(f"Logged in as {bot.user.name} ({bot.user.id})", flush=True)
     print("------", flush=True)
     try:
