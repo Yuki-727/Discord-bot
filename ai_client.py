@@ -22,10 +22,11 @@ class AIClient:
             "messages": messages
         }
 
+        base_url = self.base_url.rstrip("/")
         async with httpx.AsyncClient(timeout=30.0) as client:
             try:
                 response = await client.post(
-                    f"{self.base_url}/chat/completions",
+                    f"{base_url}/chat/completions",
                     headers=headers,
                     json=payload
                 )
