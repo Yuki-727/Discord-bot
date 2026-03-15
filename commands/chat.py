@@ -84,9 +84,13 @@ def apply_persona_filter(text, user_id):
     # Order matters: replace specific contractions/phrases first
     replacements = [
         (r"\bI'm\b", "Yuki is"),
+        (r"\bi'm\b", "Yuki is"),
+        (r"\bI am\b", "Yuki is"),
         (r"\bi am\b", "Yuki is"),
         (r"\bi've\b", "Yuki has"),
+        (r"\bI've\b", "Yuki has"),
         (r"\bi was\b", "Yuki was"),
+        (r"\bI was\b", "Yuki was"),
         (r"\bmy\b", "Yuki's"),
         (r"\bmine\b", "Yuki's"),
         (r"\bI\b", "Yuki"),
@@ -104,6 +108,7 @@ def apply_persona_filter(text, user_id):
         (r"\bYuki are\b", "Yuki is"),
         (r"\bYuki have\b", "Yuki has"),
         (r"\bYuki's are\b", "Yuki's is"),
+        (r"\bYuki'm\b", "Yuki is"),
     ]
     
     for pattern, repl in fixes:
