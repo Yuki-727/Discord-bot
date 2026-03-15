@@ -95,8 +95,9 @@ async def handle_chat_command(ctx_or_interaction, message: str):
         await target.send(response)
         return
 
-    # Split response by double newlines for natural feel
-    parts = response.split("\n\n")
+    # Split response by newlines for natural feel (both \n and \n\n)
+    # Using a regex to split by one or more newlines
+    parts = re.split(r'\n+', response)
     
     for i, part in enumerate(parts):
         part = part.strip()
@@ -106,7 +107,8 @@ async def handle_chat_command(ctx_or_interaction, message: str):
             if i == 0: await ctx_or_interaction.followup.send(part)
             else: await ctx_or_interaction.channel.send(part)
         else:
-            await ctx_or_interaction.channel.send(part)
+            await ctx_or_interaction.channel.send(part, allowed_mentions=discord.AllowedMentions(users=True))
         
         if i < len(parts) - 1:
+            # Human-like delay between messages
             await asyncio.sleep(0.5)

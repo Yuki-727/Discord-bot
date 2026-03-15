@@ -21,10 +21,11 @@ async def test_modular_system():
     username = "Nyakaki"
     
     print("--- 1. Testing Perception (Affection Update) ---")
-    relationship.update_relationship(user_id, "Yuki giỏi quá!")
+    relationship.update_relationship(user_id, "Yuki you are so cool!")
     info = relationship.get_affection_info(user_id)
     print(f"Affection: {info['score']} ({info['level']})")
     assert info['score'] > 0
+    assert info['level'] == "Stranger"
     
     print("--- 2. Testing Memory Extraction ---")
     memory.extract_memory(user_id, "Sinh nhật của tôi là ngày 27/7")
@@ -37,7 +38,7 @@ async def test_modular_system():
     print("System Prompt Snippet:\n", prompt[:200], "...")
     assert "<think>" in prompt
     assert "<chat>" in prompt
-    assert username in prompt
+    assert f"<@{user_id}>" in prompt
     
     print("✅ Modular system verification passed!")
     

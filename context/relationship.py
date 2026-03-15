@@ -7,10 +7,10 @@ class RelationshipModule:
     def get_affection_info(self, user_id):
         affection = self.db.get_affection(user_id)
         
-        closeness = "Người lạ"
-        if affection > 50: closeness = "Người quen"
-        if affection > 200: closeness = "Bạn thân"
-        if affection > 500: closeness = "Rất thân thiết"
+        closeness = "Stranger"
+        if affection > 50: closeness = "Acquaintance"
+        if affection > 200: closeness = "Good Friend"
+        if affection > 500: closeness = "Very Close"
         
         return {
             "score": affection,
@@ -19,8 +19,8 @@ class RelationshipModule:
 
     def update_relationship(self, user_id, message_content):
         # Sentiment-based affection logic
-        positive_triggers = ["ngoan", "giỏi", "thích", "yêu", "khen", "đẹp", "dễ thương"]
-        negative_triggers = ["ngốc", "ghét", "xấu", "phiền", "tệ"]
+        positive_triggers = ["good", "smart", "love", "like", "awesome", "cute", "cool", "nice"]
+        negative_triggers = ["stupid", "hate", "ugly", "annoying", "bad", "mean"]
         
         change_val = 0
         message_lower = message_content.lower()
