@@ -95,9 +95,9 @@ class Database:
         with self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('''
-                SELECT username, content FROM chat_logs 
+                SELECT user_id, username, content FROM chat_logs 
                 WHERE channel_id = ? 
-                ORDER BY timestamp DESC LIMIT ?
+                ORDER BY id DESC LIMIT ?
             ''', (channel_id, limit))
             logs = cursor.fetchall()
             return logs[::-1] # Reverse to get chronological order

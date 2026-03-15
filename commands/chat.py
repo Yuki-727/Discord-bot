@@ -24,7 +24,7 @@ def setup_context(db, identity, memory, relationship, prompt_builder):
     _relationship = relationship
     _prompt_builder = prompt_builder
 
-async def get_ai_response(user_id, username, channel_id, message_text):
+async def get_ai_response(user_id, username, channel_id, message_text, bot_id):
     # 1. Perception Layer (Update relationship & memory)
     if _relationship:
         _relationship.update_relationship(user_id, message_text)
@@ -43,15 +43,14 @@ async def get_ai_response(user_id, username, channel_id, message_text):
         logs = _db.get_recent_logs(channel_id, limit=15)
         if logs:
             history_lines = []
-            bot_names = ["yuki", "yuki bot", "yuki bot#0000"] # common bot names
-            for logger_name, content in logs:
-                # Identify Yuki in history
+            for logger_id, logger_name, content in logs:
+                # Identify "self" (Yuki) by ID, not just name
                 display_name = logger_name
-                if logger_name.lower() in bot_names:
+                if str(logger_id) == str(bot_id):
                     display_name = "Yuki (You)"
                 
-                # Avoid logging the new message twice if it was just added in main.on_message
                 line = f"{display_name}: {content}"
+                # Avoid logging the new message twice if it was just added in main.on_message
                 if len(history_lines) > 0 and history_lines[-1] == line:
                     continue
                 history_lines.append(line)
@@ -61,14 +60,14 @@ async def get_ai_response(user_id, username, channel_id, message_text):
     prompt_content = f"""SYSTEM
 {system_instruction}
 
-CHANNEL HISTORY (Look back to see what was said)
+CHANNEL HISTORY (Yuki must read this to avoid repetition!)
 {history_str}
 
 LATEST MESSAGE
 {username}: {message_text}
 
 Respond following the <think> and <chat> format.
-Note: You are "Yuki" in the history above. If you see yourself already replied with a greeting, focus on the new context!"""
+Note: You are "Yuki (You)" in the history. DO NOT repeat your own previous greetings or generic phrases!"""
 
     messages = [{"role": "user", "content": prompt_content}]
     
@@ -127,13 +126,22 @@ def apply_persona_filter(text, user_id):
 # Lock for each user to prevent race conditions and handle rapid messages
 user_locks = {}
 
-async def handle_chat_command(ctx_or_interaction, message: str):
+async def handle_chat_command(ctx_or_interaction, message_text: str):
     is_interaction = isinstance(ctx_or_interaction, discord.Interaction)
-    is_message = isinstance(ctx_or_interaction, discord.Message)
     
-    user = ctx_or_interaction.user if is_interaction else ctx_or_interaction.author
-    channel = ctx_or_interaction.channel
+    if is_interaction:
+        user = ctx_or_interaction.user
+        channel = ctx_or_interaction.channel
+        bot_user = ctx_or_interaction.client.user
+    else:
+        # ctx or message
+        user = ctx_or_interaction.author
+        channel = ctx_or_interaction.channel
+        # In commands.Bot, ctx or message has access to bot via .bot or .client
+        bot_user = getattr(ctx_or_interaction, "bot", getattr(ctx_or_interaction, "client", None)).user
+
     user_id = str(user.id)
+    bot_id = str(bot_user.id)
     channel_id = str(channel.id)
     
     # 0. Queueing/Locking logic
@@ -144,7 +152,7 @@ async def handle_chat_command(ctx_or_interaction, message: str):
         if is_interaction:
             await ctx_or_interaction.response.defer()
             
-        response = await get_ai_response(user_id, user.name, channel_id, message)
+        response = await get_ai_response(user_id, user.name, channel_id, message_text, bot_id)
         
         if response.startswith("Error:"):
             if is_interaction:
@@ -163,6 +171,10 @@ async def handle_chat_command(ctx_or_interaction, message: str):
         # Apply Persona Filter (Post-processing)
         response = apply_persona_filter(response, user_id)
         
+        # Log Yuki's final response to the database so she remembers it!
+        if _db:
+            _db.log_message(channel_id, bot_id, "Yuki", response)
+
         # Split response by newlines for natural feel (both \n and \n\n)
         parts = re.split(r'\n+', response)
         
