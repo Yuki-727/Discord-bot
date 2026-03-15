@@ -36,6 +36,10 @@ async def get_ai_response(user_id, username, channel_id, message_text, bot_id):
     if _prompt_builder:
         system_instruction = _prompt_builder.build_system_prompt(user_id, username)
 
+    bot_name = "Yuki"
+    if _identity:
+        bot_name = _identity.get_profile().get('name', 'Yuki').split()[0] # Just the first name for history labels
+
     # Use DB for full channel context instead of local ChatMemory
     history_str = "No recent history."
     if _db:
@@ -44,30 +48,31 @@ async def get_ai_response(user_id, username, channel_id, message_text, bot_id):
         if logs:
             history_lines = []
             for logger_id, logger_name, content in logs:
-                # Identify "self" (Yuki) by ID, not just name
-                display_name = logger_name
+                # Identify "self" (Yuki) by ID
                 if str(logger_id) == str(bot_id):
-                    display_name = "Yuki (You)"
+                    display_tag = f"[{bot_name} (YOU)]"
+                else:
+                    display_tag = f"<@{logger_id}>"
                 
-                line = f"{display_name}: {content}"
-                # Avoid logging the new message twice if it was just added in main.on_message
+                line = f"{display_tag}: {content}"
+                # Avoid logging duplicate messages
                 if len(history_lines) > 0 and history_lines[-1] == line:
                     continue
                 history_lines.append(line)
             history_str = "\n".join(history_lines)
 
-    # 3. Prompt Builder (Refined structured prompt)
+    # 3. Prompt Builder (Total rewrite integration)
     prompt_content = f"""SYSTEM
 {system_instruction}
 
-CHANNEL HISTORY (Yuki must read this to avoid repetition!)
+CHANNEL HISTORY (Look back for context!)
 {history_str}
 
 LATEST MESSAGE
-{username}: {message_text}
+<@{user_id}>: {message_text}
 
 Respond following the <think> and <chat> format.
-Note: You are "Yuki (You)" in the history. DO NOT repeat your own previous greetings or generic phrases!"""
+Note: You are [{bot_name} (YOU)] in the history. Respond naturally to the conversation!"""
 
     messages = [{"role": "user", "content": prompt_content}]
     
@@ -173,7 +178,10 @@ async def handle_chat_command(ctx_or_interaction, message_text: str):
         
         # Log Yuki's final response to the database so she remembers it!
         if _db:
-            _db.log_message(channel_id, bot_id, "Yuki", response)
+            bot_name = "Yuki"
+            if _identity:
+                bot_name = _identity.get_profile().get('name', 'Yuki').split()[0]
+            _db.log_message(channel_id, bot_id, bot_name, response)
 
         # Split response by newlines for natural feel (both \n and \n\n)
         parts = re.split(r'\n+', response)
