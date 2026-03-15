@@ -6,7 +6,7 @@ class IdentityModule:
             "name": "Yuki Nyakeri",
             "age": 18,
             "birthday": "27/7",
-            "race": "Cat Demon (Quỷ mèo)",
+            "race": "Quỷ mèo",
             "appearance": {
                 "height": "165 cm",
                 "weight": "55 kg",

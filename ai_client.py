@@ -22,7 +22,10 @@ class AIClient:
         }
         payload = {
             "model": self.model,
-            "messages": messages
+            "messages": messages,
+            "temperature": 0.9,
+            "top_p": 0.9,
+            "max_tokens": 1000
         }
 
         base_url = self.base_url.rstrip("/")

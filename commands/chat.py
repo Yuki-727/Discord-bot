@@ -59,16 +59,16 @@ Respond following the [THOUGHTS] and [RESPONSE] format."""
     # 4. LLM Thought Layer
     raw_response = await ai_client.generate_response(messages)
     
-    # 5. Parse Layer (Extract thoughts and response)
+    # 5. Parse Layer (Extract chat portion)
     final_response = raw_response
-    if "[RESPONSE]" in raw_response:
-        # Extract content between [RESPONSE] and [/RESPONSE] or just after [RESPONSE]
-        match = re.search(r"\[RESPONSE\](.*?)(\[/RESPONSE\]|$)", raw_response, re.DOTALL | re.IGNORECASE)
+    if "<chat>" in raw_response:
+        # Extract content between <chat> and </chat>
+        match = re.search(r"<chat>(.*?)(</chat>|$)", raw_response, re.DOTALL | re.IGNORECASE)
         if match:
             final_response = match.group(1).strip()
-    elif "[THOUGHTS]" in raw_response:
-        # If [RESPONSE] is missing but [THOUGHTS] is there, try to find text after [/THOUGHTS]
-        parts = re.split(r"\[/THOUGHTS\]", raw_response, flags=re.IGNORECASE)
+    elif "<think>" in raw_response:
+        # Fallback if AI forgot <chat> but has <think>
+        parts = re.split(r"</think>", raw_response, flags=re.IGNORECASE)
         if len(parts) > 1:
             final_response = parts[1].strip()
 

@@ -35,8 +35,8 @@ async def test_modular_system():
     print("--- 3. Testing Prompt Construction ---")
     prompt = builder.build_system_prompt(user_id, username)
     print("System Prompt Snippet:\n", prompt[:200], "...")
-    assert "[THOUGHTS]" in prompt
-    assert "[RESPONSE]" in prompt
+    assert "<think>" in prompt
+    assert "<chat>" in prompt
     assert username in prompt
     
     print("✅ Modular system verification passed!")
