@@ -1,7 +1,14 @@
 import discord
 from discord.ext import commands
 import config
-from commands.chat import handle_chat_command
+from commands.chat import handle_chat_command, setup_context
+from utils.database import Database
+from utils.context_manager import ContextManager
+
+# Initialize Database and ContextManager
+db = Database()
+context_manager = ContextManager(db)
+setup_context(context_manager)
 
 # Initialize bot with necessary intents
 intents = discord.Intents.default()
@@ -20,6 +27,23 @@ async def on_ready():
         print(f"Synced {len(synced)} command(s)")
     except Exception as e:
         print(f"Failed to sync commands: {e}")
+
+@bot.event
+async def on_message(message):
+    # Ignore messages from the bot itself
+    if message.author == bot.user:
+        return
+
+    # Log message for passive context
+    db.log_message(
+        str(message.channel.id),
+        str(message.author.id),
+        message.author.name,
+        message.content
+    )
+
+    # Allow commands to be processed
+    await bot.process_commands(message)
 
 @bot.command(name="chat")
 async def chat_prefix(ctx, *, message: str):
