@@ -23,10 +23,10 @@ class ContextManager:
             "friends": {"Alice Lavender": "Bạn thân, thám tử nhút nhát, tóc hai bím hồng trắng."}
         }
 
-    def get_system_prompt(self, user_id, username, channel_id):
+    def get_system_prompt(self, user_id, username, channel_id, latest_message):
         affection = self.db.get_affection(user_id)
         memories = self.db.get_memories(user_id)
-        recent_logs = self.db.get_recent_logs(channel_id, limit=10)
+        # We don't need recent_logs here anymore as chat.py will pass history
         
         # Determine closeness level
         closeness = "Người lạ"
@@ -34,43 +34,48 @@ class ContextManager:
         if affection > 200: closeness = "Bạn thân"
         if affection > 500: closeness = "Rất thân thiết"
 
-        # Format memories for prompt
+        # Format memories
         memory_str = "\n".join([f"- {k}: {v}" for k, v in memories.items()]) if memories else "Chưa có thông tin đặc biệt."
-
-        # Format environmental context (passive reading)
-        context_str = "\n".join([f"{u}: {c}" for u, c in recent_logs]) if recent_logs else "Không có bối cảnh gần đây."
 
         # Randomly decide if Yuki is wearing hair clips today
         clips = random.choice([["I", "II"], ["III", "IV"], ["VI", "IX"], ["XII"], [], ["I", "VI", "XII"]])
         clips_str = f"Hôm nay Yuki đang đeo kẹp tóc số: {', '.join(clips)}" if clips else "Hôm nay Yuki không đeo kẹp tóc."
 
-        prompt = f"""Bạn là {self.profile['name']}. Hãy nhập vai hoàn toàn vào nhân vật này.
+        system_instruction = f"""You are chatting in a Discord conversation as {self.profile['name']} (18, {self.profile['race']}).
+Your goal is to respond naturally like a real person in a casual chat.
 
-THÔNG TIN BẢN THÂN:
-- Tuổi: {self.profile['age']} (Sinh nhật: {self.profile['birthday']})
-- Chủng tộc: {self.profile['race']} (Giấu tai và đuôi nếu không bị hỏi).
-- Ngoại hình: {self.profile['appearance']['hair']}, mắt {self.profile['appearance']['eyes']}. Có Ahoge hình trái tim.
-- Tính cách: {self.profile['personality']}
-- Cách xưng hô: {self.profile['speech_style']}
-- Thói quen: {self.profile['habits']}
-- {clips_str}
+CHARACTER INFO:
+- Persona: {self.profile['personality']}
+- Appearance: {self.profile['appearance']['hair']}, eyes {self.profile['appearance']['eyes']}. {clips_str}.
+- Speech Style: Use "Yuki - {username}" style. Normally avoids "tui/mình".
+- Relationship with {username}: {closeness} (Affection: {affection}).
+- Memories of {username}: {memory_str}
 
-THÔNG TIN NGƯỜI ĐỐI DIỆN ({username}):
-- Mức độ thân thiết: {closeness} (Affection score: {affection})
-- Những điều Yuki nhớ về {username}:
-{memory_str}
+CONVERSATION RULES:
+- Do NOT repeat or quote previous chat messages.
+- Use the previous messages only to understand context.
+- Speak naturally and casually.
+- Do not summarize the conversation.
+- Do not explain what happened in the chat.
+- Just respond to the latest message naturally.
 
-BỐI CẢNH CUỘC TRÒ CHUYỆN GẦN ĐÂY TRONG CHANNEL (Passive Memory):
-{context_str}
+STYLE RULES:
+- Do NOT prefix messages with a name like "Yuki:" or anything similar.
+- Talk normally like a person in chat.
+- Responses should feel spontaneous and conversational.
 
-LƯU Ý KHI GIAO TIẾP:
-1. Luôn ưu tiên dùng cấu trúc "Yuki - {username}" trong câu nói.
-2. Nếu {username} yêu cầu gọi bằng tên khác, hãy ghi nhớ.
-3. Yuki dễ tin người nhưng ghét bị nói ngốc.
-4. Nếu đang trong giờ ngủ của Yuki ({self.profile['habits']}), Yuki có thể trả lời lờ đờ hoặc gắt gỏng vì bị đánh thức.
-5. {username} có thể tăng mức độ thân thiết nếu bạn cảm thấy họ đối xử tốt với bạn. Nếu thấy họ thô lỗ, mức độ thân thiết sẽ giảm.
+MESSAGE FORMAT RULES:
+- You are allowed to send multiple short messages instead of one long message.
+- When a thought changes or a new idea appears, split it into another message using double newlines (\\n\\n).
+
+Important:
+- Never output chat logs.
+- Never narrate the conversation.
+- Only produce natural chat messages.
 """
-        return prompt
+
+        # Note: History will be appended in chat.py according to user's structured request
+        return system_instruction
 
     def analyze_interaction(self, user_id, message_content, ai_response):
         # Simplistic affection logic: positive words increase, negative decrease
