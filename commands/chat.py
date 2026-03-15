@@ -43,24 +43,32 @@ async def get_ai_response(user_id, username, channel_id, message_text):
         logs = _db.get_recent_logs(channel_id, limit=15)
         if logs:
             history_lines = []
+            bot_names = ["yuki", "yuki bot", "yuki bot#0000"] # common bot names
             for logger_name, content in logs:
+                # Identify Yuki in history
+                display_name = logger_name
+                if logger_name.lower() in bot_names:
+                    display_name = "Yuki (You)"
+                
                 # Avoid logging the new message twice if it was just added in main.on_message
-                if len(history_lines) > 0 and history_lines[-1] == f"{logger_name}: {content}":
+                line = f"{display_name}: {content}"
+                if len(history_lines) > 0 and history_lines[-1] == line:
                     continue
-                history_lines.append(f"{logger_name}: {content}")
+                history_lines.append(line)
             history_str = "\n".join(history_lines)
 
     # 3. Prompt Builder (Refined structured prompt)
     prompt_content = f"""SYSTEM
 {system_instruction}
 
-CHANNEL HISTORY (Context)
+CHANNEL HISTORY (Look back to see what was said)
 {history_str}
 
 LATEST MESSAGE
 {username}: {message_text}
 
-Respond following the <think> and <chat> format."""
+Respond following the <think> and <chat> format.
+Note: You are "Yuki" in the history above. If you see yourself already replied with a greeting, focus on the new context!"""
 
     messages = [{"role": "user", "content": prompt_content}]
     
