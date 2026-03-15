@@ -50,6 +50,16 @@ async def on_message(message):
         message.content
     )
 
+    # Passive invocation check: if mentioned or name in message
+    is_mentioned = bot.user in message.mentions
+    is_named = "yuki" in message.content.lower()
+    
+    if is_mentioned or is_named:
+        # Avoid double-triggering if it starts with !chat
+        if not message.content.startswith("!chat"):
+            await handle_chat_command(message, message.content)
+            return
+
     # Allow commands to be processed
     await bot.process_commands(message)
 

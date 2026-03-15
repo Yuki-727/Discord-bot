@@ -79,39 +79,55 @@ Respond following the [THOUGHTS] and [RESPONSE] format."""
         
     return final_response
 
+# Lock for each user to prevent race conditions and handle rapid messages
+user_locks = {}
+
 async def handle_chat_command(ctx_or_interaction, message: str):
     is_interaction = isinstance(ctx_or_interaction, discord.Interaction)
+    is_message = isinstance(ctx_or_interaction, discord.Message)
+    
     user = ctx_or_interaction.user if is_interaction else ctx_or_interaction.author
     channel = ctx_or_interaction.channel
+    user_id = str(user.id)
     channel_id = str(channel.id)
     
-    if is_interaction:
-        await ctx_or_interaction.response.defer()
-        
-    response = await get_ai_response(str(user.id), user.name, channel_id, message)
+    # 0. Queueing/Locking logic
+    if user_id not in user_locks:
+        user_locks[user_id] = asyncio.Lock()
     
-    if response.startswith("Error:"):
-        target = ctx_or_interaction.followup if is_interaction else ctx_or_interaction.channel
-        await target.send(response)
-        return
-
-    # Safety: replace literal "\n" characters with real ones
-    response = response.replace("\\n", "\n")
-    
-    # Split response by newlines for natural feel (both \n and \n\n)
-    # Using a regex to split by one or more newlines
-    parts = re.split(r'\n+', response)
-    
-    for i, part in enumerate(parts):
-        part = part.strip()
-        if not part: continue
-            
+    async with user_locks[user_id]:
         if is_interaction:
-            if i == 0: await ctx_or_interaction.followup.send(part)
-            else: await ctx_or_interaction.channel.send(part)
-        else:
-            await ctx_or_interaction.channel.send(part, allowed_mentions=discord.AllowedMentions(users=True))
+            await ctx_or_interaction.response.defer()
+            
+        response = await get_ai_response(user_id, user.name, channel_id, message)
         
-        if i < len(parts) - 1:
-            # Human-like delay between messages
-            await asyncio.sleep(0.5)
+        if response.startswith("Error:"):
+            if is_interaction:
+                await ctx_or_interaction.followup.send(response)
+            else:
+                await channel.send(response)
+            return
+
+        # Safety: replace literal "\n" characters with real ones
+        response = response.replace("\\n", "\n")
+        
+        # Strip any lingering roleplay (*actions*) or prefixes (Yuki: )
+        response = re.sub(r'\*.*?\*', '', response)
+        response = re.sub(r'^Yuki:\s*', '', response, flags=re.IGNORECASE)
+        
+        # Split response by newlines for natural feel (both \n and \n\n)
+        parts = re.split(r'\n+', response)
+        
+        for i, part in enumerate(parts):
+            part = part.strip()
+            if not part: continue
+                
+            if is_interaction:
+                if i == 0: await ctx_or_interaction.followup.send(part)
+                else: await channel.send(part)
+            else:
+                await channel.send(part, allowed_mentions=discord.AllowedMentions(users=True))
+            
+            if i < len(parts) - 1:
+                # Human-like delay between messages
+                await asyncio.sleep(0.5)
