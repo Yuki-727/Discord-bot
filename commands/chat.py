@@ -79,6 +79,34 @@ Respond following the [THOUGHTS] and [RESPONSE] format."""
         
     return final_response
 
+def apply_persona_filter(text, user_id):
+    # Mapping table: (regex_pattern, replacement)
+    # Using \b for word boundaries to avoid partial matches (e.g., "mind" becoming "Yukisnd")
+    replacements = [
+        (r'\bI\b', 'Yuki'),
+        (r'\bme\b', 'Yuki'),
+        (r'\bmy\b', "Yuki's"),
+        (r'\bmine\b', "Yuki's"),
+        (r'\byou\b', f'<@{user_id}>'),
+    ]
+    
+    filtered = text
+    for pattern, repl in replacements:
+        filtered = re.sub(pattern, repl, filtered, flags=re.IGNORECASE)
+        
+    # Basic grammar fixes after replacement
+    fixes = [
+        (r'\bYuki am\b', 'Yuki is'),
+        (r'\bYuki are\b', 'Yuki is'),
+        (r'\bYuki have\b', 'Yuki has'),
+        (r'\bYuki\'s are\b', "Yuki's is"), # Often used for "my ... are" -> "Yuki's ... are" but simple fix for now
+    ]
+    
+    for pattern, repl in fixes:
+        filtered = re.sub(pattern, repl, filtered, flags=re.IGNORECASE)
+        
+    return filtered
+
 # Lock for each user to prevent race conditions and handle rapid messages
 user_locks = {}
 
@@ -114,6 +142,9 @@ async def handle_chat_command(ctx_or_interaction, message: str):
         # Strip any lingering roleplay (*actions*) or prefixes (Yuki: )
         response = re.sub(r'\*.*?\*', '', response)
         response = re.sub(r'^Yuki:\s*', '', response, flags=re.IGNORECASE)
+        
+        # Apply Persona Filter (Post-processing)
+        response = apply_persona_filter(response, user_id)
         
         # Split response by newlines for natural feel (both \n and \n\n)
         parts = re.split(r'\n+', response)

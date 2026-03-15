@@ -39,15 +39,14 @@ async def test_modular_system():
     assert "hairpin" in status
     
     prompt = builder.build_system_prompt(user_id, username)
-    print("System Prompt Snippet:\n", prompt[:200], "...")
+    print("--- SYSTEM PROMPT ---")
+    print(prompt)
+    print("--- END PROMPT ---")
     assert "<think>" in prompt
     assert "<chat>" in prompt
-    assert f"<@{user_id}>" in prompt
     assert "Alice Lavender" in prompt
-    assert "best friend" in prompt
-    assert "refer to yourself) as \"Yuki\"" in prompt
-    assert "DO NOT use italicized roleplay" in prompt
-    assert "DO NOT use \"She\" or \"Her\" to refer to yourself" in prompt
+    assert "DO NOT be a helpful AI assistant" in prompt
+    assert "Talk naturally" in prompt
     
     print("✅ Modular system verification passed!")
     
