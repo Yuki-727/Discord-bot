@@ -95,6 +95,9 @@ async def handle_chat_command(ctx_or_interaction, message: str):
         await target.send(response)
         return
 
+    # Safety: replace literal "\n" characters with real ones
+    response = response.replace("\\n", "\n")
+    
     # Split response by newlines for natural feel (both \n and \n\n)
     # Using a regex to split by one or more newlines
     parts = re.split(r'\n+', response)

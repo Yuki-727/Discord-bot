@@ -25,7 +25,16 @@ class IdentityModule:
         return self.profile
 
     def get_daily_status(self):
-        # Randomly decide if Yuki is wearing hair clips today
-        clips = random.choice([["I", "II"], ["III", "IV"], ["VI", "IX"], ["XII"], [], ["I", "VI", "XII"]])
-        clips_str = f"Hôm nay Yuki đang đeo kẹp tóc số: {', '.join(clips)}" if clips else "Hôm nay Yuki không đeo kẹp tóc."
-        return clips_str
+        # Use a seed based on the current date so it stays the same all day
+        import datetime
+        seed = datetime.date.today().strftime("%Y%m%d")
+        random.seed(seed)
+        
+        # Possible hairpin sets (only one per day)
+        hairpin_options = ["I", "II", "III", "IV", "VI", "IX", "XII", "I & VI", "VI & IX", "heart-shaped"]
+        chosen = random.choice(hairpin_options)
+        
+        # Reset seed to avoid affecting other random calls
+        random.seed(None)
+        
+        return f"Today, Yuki is wearing her {chosen} hairpin."

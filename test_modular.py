@@ -34,11 +34,16 @@ async def test_modular_system():
     assert "27/7" in facts
     
     print("--- 3. Testing Prompt Construction ---")
+    status = identity.get_daily_status()
+    print(f"Daily Status: {status}")
+    assert "hairpin" in status
+    
     prompt = builder.build_system_prompt(user_id, username)
     print("System Prompt Snippet:\n", prompt[:200], "...")
     assert "<think>" in prompt
     assert "<chat>" in prompt
     assert f"<@{user_id}>" in prompt
+    assert "Cat Demon" in prompt
     
     print("✅ Modular system verification passed!")
     
