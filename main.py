@@ -3,12 +3,20 @@ from discord.ext import commands
 import config
 from commands.chat import handle_chat_command, setup_context
 from utils.database import Database
-from utils.context_manager import ContextManager
+from context.identity import IdentityModule
+from context.memory import MemoryModule
+from context.relationship import RelationshipModule
+from context.prompt_builder import PromptBuilder
 
-# Initialize Database and ContextManager
+# Initialize Database and Modular Context
 db = Database()
-context_manager = ContextManager(db)
-setup_context(context_manager)
+identity = IdentityModule()
+memory = MemoryModule(db)
+relationship = RelationshipModule(db)
+prompt_builder = PromptBuilder(identity, memory, relationship)
+
+# Pass new components to chat command handler
+setup_context(identity, memory, relationship, prompt_builder)
 
 # Initialize bot with necessary intents
 intents = discord.Intents.default()
