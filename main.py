@@ -16,7 +16,7 @@ relationship = RelationshipModule(db)
 prompt_builder = PromptBuilder(identity, memory, relationship)
 
 # Pass new components to chat command handler
-setup_context(identity, memory, relationship, prompt_builder)
+setup_context(db, identity, memory, relationship, prompt_builder)
 
 # Initialize bot with necessary intents
 intents = discord.Intents.default()

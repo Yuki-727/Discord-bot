@@ -9,14 +9,16 @@ from utils.memory import ChatMemory
 ai_client = AIClient()
 chat_memory = ChatMemory(limit=8)
 
-# Context modules
+# Context components (provided via setup_context)
+_db = None
 _identity = None
 _memory = None
 _relationship = None
 _prompt_builder = None
 
-def setup_context(identity, memory, relationship, prompt_builder):
-    global _identity, _memory, _relationship, _prompt_builder
+def setup_context(db, identity, memory, relationship, prompt_builder):
+    global _db, _identity, _memory, _relationship, _prompt_builder
+    _db = db
     _identity = identity
     _memory = memory
     _relationship = relationship
@@ -29,30 +31,36 @@ async def get_ai_response(user_id, username, channel_id, message_text):
     if _memory:
         _memory.extract_memory(user_id, message_text)
 
-    # 2. Context Layer (Prepare history & system prompt)
-    history = chat_memory.get_history(user_id)
+    # 2. Context Layer (Prepare channel history & system prompt)
     system_instruction = "You are Yuki-bot."
     if _prompt_builder:
         system_instruction = _prompt_builder.build_system_prompt(user_id, username)
 
-    history_lines = []
-    for msg in history:
-        role_label = username if msg["role"] == "user" else "bot"
-        history_lines.append(f"{role_label}: {msg['content']}")
-    
-    history_str = "\n".join(history_lines) if history_lines else "No previous history."
+    # Use DB for full channel context instead of local ChatMemory
+    history_str = "No recent history."
+    if _db:
+        # Get last 15 messages from this channel for context
+        logs = _db.get_recent_logs(channel_id, limit=15)
+        if logs:
+            history_lines = []
+            for logger_name, content in logs:
+                # Avoid logging the new message twice if it was just added in main.on_message
+                if len(history_lines) > 0 and history_lines[-1] == f"{logger_name}: {content}":
+                    continue
+                history_lines.append(f"{logger_name}: {content}")
+            history_str = "\n".join(history_lines)
 
     # 3. Prompt Builder (Refined structured prompt)
     prompt_content = f"""SYSTEM
 {system_instruction}
 
-CHAT HISTORY
+CHANNEL HISTORY (Context)
 {history_str}
 
 LATEST MESSAGE
 {username}: {message_text}
 
-Respond following the [THOUGHTS] and [RESPONSE] format."""
+Respond following the <think> and <chat> format."""
 
     messages = [{"role": "user", "content": prompt_content}]
     
@@ -62,44 +70,40 @@ Respond following the [THOUGHTS] and [RESPONSE] format."""
     # 5. Parse Layer (Extract chat portion)
     final_response = raw_response
     if "<chat>" in raw_response:
-        # Extract content between <chat> and </chat>
         match = re.search(r"<chat>(.*?)(</chat>|$)", raw_response, re.DOTALL | re.IGNORECASE)
         if match:
             final_response = match.group(1).strip()
     elif "<think>" in raw_response:
-        # Fallback if AI forgot <chat> but has <think>
         parts = re.split(r"</think>", raw_response, flags=re.IGNORECASE)
         if len(parts) > 1:
             final_response = parts[1].strip()
 
-    # Update memory if successful
-    if not raw_response.startswith("Error:"):
-        chat_memory.add_message(user_id, "user", message_text)
-        chat_memory.add_message(user_id, "assistant", final_response)
-        
     return final_response
 
 def apply_persona_filter(text, user_id):
-    # Mapping table: (regex_pattern, replacement)
-    # Using \b for word boundaries to avoid partial matches (e.g., "mind" becoming "Yukisnd")
+    # Order matters: replace specific contractions/phrases first
     replacements = [
-        (r'\bI\b', 'Yuki'),
-        (r'\bme\b', 'Yuki'),
-        (r'\bmy\b', "Yuki's"),
-        (r'\bmine\b', "Yuki's"),
-        (r'\byou\b', f'<@{user_id}>'),
+        (r"\bI'm\b", "Yuki is"),
+        (r"\bi am\b", "Yuki is"),
+        (r"\bi've\b", "Yuki has"),
+        (r"\bi was\b", "Yuki was"),
+        (r"\bmy\b", "Yuki's"),
+        (r"\bmine\b", "Yuki's"),
+        (r"\bI\b", "Yuki"),
+        (r"\bme\b", "Yuki"),
+        (r"\byou\b", f"<@{user_id}>"),
     ]
     
     filtered = text
     for pattern, repl in replacements:
         filtered = re.sub(pattern, repl, filtered, flags=re.IGNORECASE)
         
-    # Basic grammar fixes after replacement
+    # Final cleanup of common grammar slips
     fixes = [
-        (r'\bYuki am\b', 'Yuki is'),
-        (r'\bYuki are\b', 'Yuki is'),
-        (r'\bYuki have\b', 'Yuki has'),
-        (r'\bYuki\'s are\b', "Yuki's is"), # Often used for "my ... are" -> "Yuki's ... are" but simple fix for now
+        (r"\bYuki am\b", "Yuki is"),
+        (r"\bYuki are\b", "Yuki is"),
+        (r"\bYuki have\b", "Yuki has"),
+        (r"\bYuki's are\b", "Yuki's is"),
     ]
     
     for pattern, repl in fixes:
