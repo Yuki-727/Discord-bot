@@ -28,6 +28,11 @@ class YukiBot(commands.Bot):
                     print(f"Loaded extension: {cog_name}")
                 except Exception as e:
                     print(f"Failed to load extension {cog_name}: {e}")
+        
+        # Sync global slash commands
+        print("Syncing slash commands...")
+        await self.tree.sync()
+        print("Slash commands synced.")
 
     async def on_ready(self):
         print(f"Logged in as {self.user} (ID: {self.user.id})")

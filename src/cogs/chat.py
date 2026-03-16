@@ -41,5 +41,20 @@ class ChatCog(commands.Cog):
             )
             await ctx.reply(response)
 
+    @discord.app_commands.command(name="chat", description="Chat with Yuki!")
+    async def chat_slash(self, interaction: discord.Interaction, text: str):
+        # 3-second timeout protection
+        await interaction.response.defer()
+        
+        response = await pipeline.run(
+            channel_id=str(interaction.channel_id),
+            user_id=str(interaction.user.id),
+            username=interaction.user.name,
+            message_text=text,
+            bot_id=str(self.bot.user.id)
+        )
+        
+        await interaction.followup.send(response)
+
 async def setup(bot):
     await bot.add_cog(ChatCog(bot))
