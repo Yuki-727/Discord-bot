@@ -5,7 +5,7 @@ load_dotenv()
 
 class Config:
     DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
-    GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+    GROQ_API_KEY = os.getenv("GROQ_API_KEY") or os.getenv("AI_API_KEY")
     DATABASE_NAME = os.getenv("DATABASE_NAME", "yuki_v3.db")
     
     # Model settings
