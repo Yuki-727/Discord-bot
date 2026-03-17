@@ -22,6 +22,10 @@ class MessagePipeline:
         from ..processing.intent_router import intent_router
         handler_type = await intent_router.route(intent_data, {"message": normalized_text})
         
+        # If the router returned a direct response (e.g., from an internal command), return it now.
+        if handler_type and not str(handler_type).endswith("_handler"):
+            return handler_type
+        
         # 6. Memory Retrieval & 5. State Load
         memories = memory_manager.get_context(user_id, channel_id)
         state = character_state.load_state()
@@ -58,7 +62,11 @@ class MessagePipeline:
         character_state.save_state(state)
         memory_manager.update_memory(channel_id, user_id, username, normalized_text, response)
         
-        # 13. Reply (Returned to Cog)
+        # 13. [NEW] Background Semantic Extraction (Parallel)
+        from ..memory.semantic_memory import semantic_memory
+        asyncio.create_task(semantic_memory.extract_facts(user_id, username, normalized_text, response))
+        
+        # 14. Reply (Returned to Cog)
         return response
 
 pipeline = MessagePipeline()
