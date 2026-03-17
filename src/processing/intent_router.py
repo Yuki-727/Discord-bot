@@ -11,8 +11,12 @@ class IntentRouter:
 
         if intent == "command":
             from .command_module import command_module
-            # Handle as internal command
-            return await command_module.execute(context['message'], context)
+            cmd_name = context['message'].replace("!", "").replace("/", "").split()[0].lower()
+            if cmd_name in command_module.commands:
+                return await command_module.execute(context['message'], context)
+            
+            # If AI classified as command but it's not a system command, fallback to chat
+            return "chat_handler"
         
         if intent == "memory_query":
             return "memory_handler"

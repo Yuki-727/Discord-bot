@@ -5,11 +5,18 @@ class CommandModule:
             "reset_state": self.reset_state,
         }
 
-    async def execute(self, command_name, context):
+    async def execute(self, message_text, context):
         """
-        Executes internal bot commands detected by Intent Detection.
+        Executes internal bot commands.
         """
-        handler = self.commands.get(command_name.replace("!", "").replace("/", ""))
+        # Extract the first word as the command
+        parts = message_text.replace("!", "").replace("/", "").split()
+        if not parts:
+            return "No command provided."
+            
+        cmd_name = parts[0].lower()
+        handler = self.commands.get(cmd_name)
+        
         if handler:
             return await handler(context)
         return "Command not recognized by internal system."
