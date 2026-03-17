@@ -5,26 +5,29 @@ class BehaviorAnalyzer:
     def __init__(self):
         pass
 
-    async def analyze(self, message_text, username):
+    async def analyze(self, message_text, username, intent_data):
         """
         The "Analyze Phase" (Think step).
-        Extracts: Who, What, Action.
+        Step 1: Contextual Analysis (Who, What, Action)
+        Step 2: Intent Reasoning (Best Action, Tone)
         """
+        intent = intent_data.get("intent", "casual_chat")
+        
         prompt = f"""Analyze the following user message.
 User: {username}
+Detected Intent: {intent}
 Message: "{message_text}"
 
-Extract the following information:
-1. Subject (Who): The person or entity being talked about.
-2. Object (What): The thing or topic involved.
-3. Action (Do): What is the user trying to achieve or what action is requested?
-
-Return ONLY a JSON object:
+Perform a deep analysis and return ONLY a JSON object:
 {{
-  "subject": "...",
-  "object": "...",
-  "action": "...",
-  "summary": "Brief summary of intent"
+  "subject": "The person or entity being talked about",
+  "object": "The thing or topic involved",
+  "action": "What is the user trying to achieve?",
+  "reasoning": {{
+    "best_action": "The optimal way for the AI to respond (e.g., empathy_response, factual_answer, follow_up_question)",
+    "tone": "The appropriate emotional tone (e.g., soft, supportive, witty, professional)"
+  }},
+  "summary": "Brief summary of the entire context"
 }}
 """
         try:
@@ -39,6 +42,7 @@ Return ONLY a JSON object:
                 "subject": username,
                 "object": "conversation",
                 "action": "chatting",
+                "reasoning": {"best_action": "casual_reply", "tone": "friendly"},
                 "summary": "Standard chat interaction"
             }
 

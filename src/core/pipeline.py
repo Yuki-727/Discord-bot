@@ -34,11 +34,16 @@ class MessagePipeline:
         
         # 8. Analyze Phase (Think Step)
         from ..processing.behavior_analyzer import behavior_analyzer
-        analysis = await behavior_analyzer.analyze(normalized_text, username)
+        analysis = await behavior_analyzer.analyze(normalized_text, username, intent_data)
         
         # 9. Prompt Builder
-        # Inject analysis into prompt builder logic (future polish needed)
-        combined_context = f"{context_summary}\n\nANALYSIS OF CURRENT MESSAGE:\n{analysis['summary']}"
+        reasoning = analysis.get('reasoning', {})
+        analysis_summary = (
+            f"SUMMARY: {analysis['summary']}\n"
+            f"STRATEGY: {analysis['action']} -> {reasoning.get('best_action', 'reply')}\n"
+            f"TONE: {reasoning.get('tone', 'neutral')}"
+        )
+        combined_context = f"{context_summary}\n\nANALYSIS:\n{analysis_summary}"
         system_prompt = prompt_builder.build_system_prompt(state, memories, combined_context)
         
         # 10. LLM Call
