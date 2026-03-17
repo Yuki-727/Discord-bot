@@ -11,42 +11,49 @@ class MessagePipeline:
     async def run(self, channel_id, user_id, username, message_text, bot_id):
         # 1. Receive & 2. Filter (Handled by Cog)
         
-        # 3. Intent Detection (Placeholder)
-        intent = "chat"
+        # 3. Normalize Text
+        normalized_text = message_text.strip()
         
-        # 4. Memory Retrieval
+        # 4. Intent Detection (Rule + AI)
+        from ..processing.intent_classifier import intent_classifier
+        intent_data = await intent_classifier.classify(normalized_text)
+        
+        # 5. Intent Router
+        from ..processing.intent_router import intent_router
+        handler_type = await intent_router.route(intent_data, {"message": normalized_text})
+        
+        # 6. Memory Retrieval & 5. State Load
         memories = memory_manager.get_context(user_id, channel_id)
-        
-        # 5. State Load
         state = character_state.load_state()
         
-        # 6. Context Builder (Optimization)
+        # 7. Context Builder (Optimization)
         history_lines = []
         for uid, name, content in memories['short_term']:
             history_lines.append(f"{name}: {content}")
         context_summary = "\n".join(history_lines)
         
-        # 7. Prompt Builder
-        system_prompt = prompt_builder.build_system_prompt(state, memories, context_summary)
+        # 8. Analyze Phase (Think Step)
+        from ..processing.behavior_analyzer import behavior_analyzer
+        analysis = await behavior_analyzer.analyze(normalized_text, username)
         
-        # 8. LLM Call
+        # 9. Prompt Builder
+        # Inject analysis into prompt builder logic (future polish needed)
+        combined_context = f"{context_summary}\n\nANALYSIS OF CURRENT MESSAGE:\n{analysis['summary']}"
+        system_prompt = prompt_builder.build_system_prompt(state, memories, combined_context)
+        
+        # 10. LLM Call
         messages = [
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": f"{username}: {message_text}"}
+            {"role": "user", "content": f"{username}: {normalized_text}"}
         ]
         response = await ai_client.generate_response(messages)
         
-        # 9. State Update (Placeholder)
-        state['last_interaction'] = message_text
+        # 11. State & 12. Memory Update
+        state['last_interaction'] = normalized_text
         character_state.save_state(state)
+        memory_manager.update_memory(channel_id, user_id, username, normalized_text, response)
         
-        # 10. Memory Update
-        memory_manager.update_memory(channel_id, user_id, username, message_text, response)
-        
-        # 11. Personality Filter (Placeholder)
-        final_text = response
-        
-        # 12. Reply (Returned to Cog)
-        return final_text
+        # 13. Reply (Returned to Cog)
+        return response
 
 pipeline = MessagePipeline()
