@@ -27,9 +27,8 @@ COPY . .
 # Create a directory for persistent data
 RUN mkdir -p /app/data
 
-# Ensure the app uses the persistence directory
-# The user should map this to a Docker Volume
-VOLUME ["/app/data"]
+# NOTE: Railway bans the 'VOLUME' keyword in Dockerfiles.
+# You must manually attach a Volume to '/app/data' in the Railway Volume settings.
 
 # Environment variables (to be provided at runtime)
 # DISCORD_TOKEN
