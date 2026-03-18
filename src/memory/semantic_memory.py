@@ -18,21 +18,23 @@ class SemanticMemory:
 
     async def extract_facts(self, user_id, username, message_text, response_text):
         """
-        AI analyzes the interaction to see if there's any permanent info worth saving.
+        AI analyzes the interaction (70% weight on User Message, 30% on Bot Response).
+        Extracts facts in a unified JSON format.
         """
-        prompt = f"""Review the following interaction between {username} and the AI.
-User: "{message_text}"
-AI: "{response_text}"
+        prompt = f"""Analyze this interaction. 
+Weight: 70% on User's Message ("{message_text}"), 30% on AI's Response ("{response_text}").
 
-Identify if any permanent facts about the user or their preferences were revealed.
-Example: "User likes pizza", "User's birthday is June 5th", "User is feeling sad about work".
+Goal: Identify 'memorable' facts about the user. Ignore common/obvious info.
+Categories: identity, preferences, relationship, goals, fact, constraints.
 
-Return ONLY a JSON array of objects, or an empty array [] if nothing important:
+Return ONLY a JSON array of objects:
 [
   {{
-    "category": "preferences/personal/lore/status",
-    "content": "The fact in one concise sentence",
-    "importance": 1-5
+    "type": "category_name",
+    "value": "concise fact",
+    "confidence": 0.0-1.0,
+    "importance": 1-5,
+    "is_memorable": true
   }}
 ]
 """
@@ -44,52 +46,92 @@ Return ONLY a JSON array of objects, or an empty array [] if nothing important:
             
             facts = json.loads(cleaned_json)
             for fact in facts:
-                self.save_fact(user_id, fact['category'], fact['content'], fact['importance'])
+                if fact.get('is_memorable') and fact.get('confidence', 0) > 0.6:
+                    await self.save_fact(user_id, fact)
         except Exception as e:
             print(f"Error in semantic extraction: {e}")
 
-    def save_fact(self, user_id, category, content, importance):
+    async def save_fact(self, user_id, fact_data):
         """
-        Saves a fact into ChromaDB with its embedding.
+        Saves or Updates a fact. Implements Conflict Resolution & Merging.
+        fact_data: {type, value, confidence, importance}
         """
+        content = fact_data['value']
+        category = fact_data['type']
         vector = embedding_engine.embed_text(content)
         
-        # Unique ID for each fact
-        fact_id = f"{user_id}_{hash(content)}_{os.getpid()}"
-        
-        self.collection.add(
-            ids=[fact_id],
-            embeddings=[vector],
-            documents=[content],
-            metadatas=[{
-                "user_id": user_id,
-                "category": category,
-                "importance": importance
-            }]
+        # 1. Search for existing similar facts of the same type
+        existing = self.collection.query(
+            query_embeddings=[vector],
+            n_results=1,
+            where={"$and": [{"user_id": user_id}, {"type": category}]}
         )
+        
+        target_id = f"{user_id}_{hash(content)}_{os.getpid()}"
+        is_update = False
+        
+        if existing['ids'][0]:
+            similarity = 1 - existing['distances'][0][0] # Using cosine space (1 - dist = similarity)
+            if similarity > 0.85: # High similarity -> Merge/Update
+                target_id = existing['ids'][0][0]
+                is_update = True
+                print(f"DEBUG: Merging/Updating existing fact for {category}: {target_id}")
+            elif category in ['identity', 'goals']:
+                # Identity/Goals are usually singular, replace if not similar enough but same type
+                self.collection.delete(ids=existing['ids'][0])
+                print(f"DEBUG: Replacing different {category} fact.")
+
+        # 2. Save (Add or Update)
+        metadata = {
+            "user_id": user_id,
+            "type": category,
+            "confidence": fact_data['confidence'],
+            "importance": fact_data['importance'],
+            "timestamp": "2024-03-18" # Or dynamic
+        }
+
+        if is_update:
+            self.collection.update(
+                ids=[target_id],
+                embeddings=[vector],
+                documents=[content],
+                metadatas=[metadata]
+            )
+        else:
+            self.collection.add(
+                ids=[target_id],
+                embeddings=[vector],
+                documents=[content],
+                metadatas=[metadata]
+            )
 
     def query_facts(self, user_id, query_text):
         """
-        Retrieve facts for a user using Vector Search.
+        Retrieve facts with Ranking & Filtering.
         """
         if not query_text:
-            return "No query provided for memory search."
+            return "No query provided."
 
-        # Convert query to vector
         query_vector = embedding_engine.embed_text(query_text)
         
-        # Search the collection
         results = self.collection.query(
             query_embeddings=[query_vector],
-            n_results=5,
+            n_results=10,
             where={"user_id": user_id}
         )
         
         if not results['documents'][0]:
             return "No matching memories found."
             
-        facts = results['documents'][0]
-        formatted_facts = "\n".join([f"- {fact}" for fact in facts])
-        return formatted_facts
+        # Rank by (distance * importance * confidence) - simplified logic
+        docs = results['documents'][0]
+        metas = results['metadatas'][0]
+        
+        ranked_facts = []
+        for i in range(len(docs)):
+            if metas[i]['confidence'] > 0.5:
+                ranked_facts.append(f"- [{metas[i]['type'].upper()}] {docs[i]}")
+
+        return "\n".join(ranked_facts[:5])
 
 semantic_memory = SemanticMemory()
