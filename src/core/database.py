@@ -71,7 +71,25 @@ class Database:
                     last_updated DATETIME DEFAULT CURRENT_TIMESTAMP
                 )
             ''')
+            # Monitored Channels for Passive Reading
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS monitored_channels (
+                    channel_id TEXT PRIMARY KEY
+                )
+            ''')
             conn.commit()
+
+    def add_monitored_channel(self, channel_id):
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("INSERT OR IGNORE INTO monitored_channels (channel_id) VALUES (?)", (channel_id,))
+            conn.commit()
+
+    def is_channel_monitored(self, channel_id):
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT 1 FROM monitored_channels WHERE channel_id = ?", (channel_id,))
+            return cursor.fetchone() is not None
 
     def log_message(self, channel_id, user_id, username, content):
         with self._get_connection() as conn:

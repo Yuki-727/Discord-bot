@@ -8,26 +8,44 @@ class ChatCog(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message(self, message):
-        # 1. Receive & 2. Filter
+        # 1. Receive & Skip Bots
         if message.author.bot:
             return
         
-        # Check if mentioned or name in message (Passive Chat)
-        is_mentioned = self.bot.user in message.mentions
-        is_named = "yuki" in message.content.lower()
-        is_replied = message.reference and message.reference.resolved and message.reference.resolved.author == self.bot.user
+        from ..core.database import db
+        from ..core.cooldown import cooldown_manager
         
-        if is_mentioned or is_named or is_replied:
-            if not message.content.startswith("!"):
-                async with message.channel.typing():
-                    response = await pipeline.run(
-                        channel_id=str(message.channel.id),
-                        user_id=str(message.author.id),
-                        username=message.author.name,
-                        message_text=message.content,
-                        bot_id=str(self.bot.user.id)
-                    )
-                    await message.reply(response)
+        channel_id = str(message.channel.id)
+        user_id = str(message.author.id)
+        is_monitored = db.is_channel_monitored(channel_id)
+        is_dm = isinstance(message.channel, discord.DMChannel)
+        
+        # Determine if we should process this message
+        # We process if: it's a DM, it starts with prefix, or channel is monitored.
+        is_command = message.content.startswith(self.bot.command_prefix)
+        
+        if is_dm or is_command or is_monitored:
+            # Check Cooldown for passive reads (not commands and not DMs)
+            on_cooldown = cooldown_manager.is_on_cooldown(user_id)
+            
+            # Run Pipeline
+            # Note: We pass everything. Pipeline's AddressingDetector will decide if we reply.
+            response = await pipeline.run(
+                channel_id=channel_id,
+                user_id=user_id,
+                username=message.author.name,
+                message_text=message.content,
+                bot_id=str(self.bot.user.id)
+            )
+            
+            # Decide whether to send the reply to Discord
+            if response and response != "[Overheard]":
+                # Only reply if not on cooldown or it's a direct command/DM
+                if not on_cooldown or is_command or is_dm:
+                    async with message.channel.typing():
+                        await message.reply(response)
+                        # Set/Reset cooldown after any successful response
+                        cooldown_manager.set_cooldown(user_id)
 
     @commands.command(name="chat")
     async def chat_command(self, ctx, *, text: str):
@@ -39,6 +57,8 @@ class ChatCog(commands.Cog):
                 message_text=text,
                 bot_id=str(self.bot.user.id)
             )
+            from ..core.cooldown import cooldown_manager
+            cooldown_manager.set_cooldown(str(ctx.author.id))
             await ctx.reply(response)
 
     @discord.app_commands.command(name="chat", description="Chat with Yuki!")
@@ -53,6 +73,8 @@ class ChatCog(commands.Cog):
             message_text=text,
             bot_id=str(self.bot.user.id)
         )
+        from ..core.cooldown import cooldown_manager
+        cooldown_manager.set_cooldown(str(interaction.user.id))
         
         await interaction.followup.send(response)
 

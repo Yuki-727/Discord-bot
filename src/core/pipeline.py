@@ -14,13 +14,35 @@ class MessagePipeline:
         # 3. Normalize Text
         normalized_text = message_text.strip()
         
-        # 4. Intent Detection (Rule + AI)
+        # 4. [NEW] Addressing Detection
+        from ..processing.addressing_detector import addressing_detector
+        # Get last 10 for context lookback
+        recent_context = memory_manager.get_context(user_id, channel_id, query_text=None)['short_term']
+        address_check = await addressing_detector.check_addressing(normalized_text, username, recent_context, bot_id)
+        
+        is_dm = channel_id == user_id # Simple DM check
+        is_addressed = address_check['is_addressed'] or is_dm
+        
+        # 5. Intent Detection (Always run for memory extraction)
         from ..processing.intent_classifier import intent_classifier
         intent_data = await intent_classifier.classify(normalized_text)
         
-        # 5. Intent Router
+        if not is_addressed:
+            # Passive Read Mode: Log to memory but don't reply
+            memory_manager.update_memory(channel_id, user_id, username, normalized_text, "[Overheard]")
+            # Still extract facts in background
+            from ..memory.semantic_memory import semantic_memory
+            asyncio.create_task(semantic_memory.extract_facts(user_id, username, normalized_text, "[Overheard]"))
+            return None # Signal to Cog to stay silent
+        
+        # 6. Intent Router
         from ..processing.intent_router import intent_router
-        handler_type = await intent_router.route(intent_data, {"message": normalized_text})
+        handler_type = await intent_router.route(intent_data, {
+            "message": normalized_text,
+            "channel_id": channel_id,
+            "user_id": user_id,
+            "username": username
+        })
         
         # If the router returned a direct response (e.g., from an internal command), return it now.
         if handler_type and not str(handler_type).endswith("_handler"):
