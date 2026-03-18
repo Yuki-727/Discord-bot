@@ -6,7 +6,7 @@ from ..ai.client import ai_client
 class AddressingDetector:
     def __init__(self, bot_name="Nia", nicknames=None):
         self.bot_name = bot_name.lower()
-        self.nicknames = [n.lower() for n in nicknames] if nicknames else []
+        self.nicknames = [n.lower() for n in nicknames] if nicknames else ["nia"]
         self.pronouns = ["cậu", "bạn", "mày", "you", "em", "anh", "chị"]
 
     async def check_addressing(self, text, username, recent_messages, bot_id):

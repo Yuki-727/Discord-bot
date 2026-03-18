@@ -57,15 +57,14 @@ class ChatCog(commands.Cog):
                 message_text=text,
                 bot_id=str(self.bot.user.id)
             )
-            from ..core.cooldown import cooldown_manager
-            cooldown_manager.set_cooldown(str(ctx.author.id))
-            await ctx.reply(response)
+            if response:
+                from ..core.cooldown import cooldown_manager
+                cooldown_manager.set_cooldown(str(ctx.author.id))
+                await ctx.reply(response)
 
-    @discord.app_commands.command(name="chat", description="Chat with Yuki!")
+    @discord.app_commands.command(name="chat", description="Chat with Nia!")
     async def chat_slash(self, interaction: discord.Interaction, text: str):
-        # 3-second timeout protection
         await interaction.response.defer()
-        
         response = await pipeline.run(
             channel_id=str(interaction.channel_id),
             user_id=str(interaction.user.id),
@@ -73,10 +72,25 @@ class ChatCog(commands.Cog):
             message_text=text,
             bot_id=str(self.bot.user.id)
         )
-        from ..core.cooldown import cooldown_manager
-        cooldown_manager.set_cooldown(str(interaction.user.id))
-        
-        await interaction.followup.send(response)
+        if response:
+            from ..core.cooldown import cooldown_manager
+            cooldown_manager.set_cooldown(str(interaction.user.id))
+            await interaction.followup.send(response)
+        else:
+            await interaction.followup.send("*(Nia overhears this but stays silent)*", ephemeral=True)
+
+    @discord.app_commands.command(name="read", description="Enable passive reading in this channel.")
+    async def read_slash(self, interaction: discord.Interaction):
+        from ..core.database import db
+        db.add_monitored_channel(str(interaction.channel_id))
+        await interaction.response.send_message("I can read the messages here now! (Passive reading enabled)", ephemeral=True)
+
+    @commands.command(name="read")
+    @commands.has_permissions(administrator=True)
+    async def read_prefix(self, ctx):
+        from ..core.database import db
+        db.add_monitored_channel(str(ctx.channel.id))
+        await ctx.send("I can read the messages here now! (Passive reading enabled)")
 
 async def setup(bot):
     await bot.add_cog(ChatCog(bot))
