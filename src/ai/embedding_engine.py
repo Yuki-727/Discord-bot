@@ -1,22 +1,32 @@
-from sentence_transformers import SentenceTransformer
-import numpy as np
+import os
+import voyageai
 
 class EmbeddingEngine:
-    def __init__(self, model_name="all-MiniLM-L6-v2"):
-        self.model = SentenceTransformer(model_name)
+    def __init__(self):
+        self.api_key = os.getenv("VOYAGE_API_KEY")
+        if not self.api_key:
+            print("WARNING: VOYAGE_API_KEY not found in environment.")
+        self.vo = voyageai.Client(api_key=self.api_key) if self.api_key else None
+        self.model = "voyage-3-lite" # Lightweight and free-tier friendly
 
     def embed_text(self, text):
         """
-        Converts text into a vector embedding.
+        Converts text into a vector embedding using Voyage AI.
         """
-        embedding = self.model.encode(text)
-        return embedding.tolist()
+        if not self.vo:
+            return [0.0] * 512 # Fallback
+            
+        result = self.vo.embed([text], model=self.model)
+        return result.embeddings[0]
 
     def embed_batch(self, texts):
         """
-        Converts a list of texts into a list of vector embeddings.
+        Converts a list of texts into vector embeddings.
         """
-        embeddings = self.model.encode(texts)
-        return embeddings.tolist()
+        if not self.vo:
+            return [[0.0] * 512 for _ in texts]
+            
+        result = self.vo.embed(texts, model=self.model)
+        return result.embeddings
 
 embedding_engine = EmbeddingEngine()
