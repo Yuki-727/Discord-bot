@@ -129,8 +129,13 @@ Return ONLY a JSON array of objects:
         
         ranked_facts = []
         for i in range(len(docs)):
-            if metas[i]['confidence'] > 0.5:
-                ranked_facts.append(f"- [{metas[i]['type'].upper()}] {docs[i]}")
+            metadata = metas[i]
+            # Handle old metadata structure (legacy from Phase 10)
+            confidence = metadata.get('confidence', 1.0)
+            fact_type = metadata.get('type') or metadata.get('category', 'fact')
+            
+            if confidence > 0.5:
+                ranked_facts.append(f"- [{fact_type.upper()}] {docs[i]}")
 
         return "\n".join(ranked_facts[:5])
 
