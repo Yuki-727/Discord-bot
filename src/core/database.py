@@ -61,6 +61,16 @@ class Database:
                     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
                 )
             ''')
+            # Persistent Conversation Summaries
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS summary_memory (
+                    channel_id TEXT PRIMARY KEY,
+                    topic TEXT,
+                    content TEXT,
+                    key_points TEXT,
+                    last_updated DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
             conn.commit()
 
     def log_message(self, channel_id, user_id, username, content):

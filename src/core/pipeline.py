@@ -62,9 +62,10 @@ class MessagePipeline:
         character_state.save_state(state)
         memory_manager.update_memory(channel_id, user_id, username, normalized_text, response)
         
-        # 13. [NEW] Background Semantic Extraction (Parallel)
+        # 13. [NEW] Background Semantic Extraction & Summarization (Parallel)
         from ..memory.semantic_memory import semantic_memory
         asyncio.create_task(semantic_memory.extract_facts(user_id, username, normalized_text, response))
+        asyncio.create_task(memory_manager.summarize_history(channel_id))
         
         # 14. Reply (Returned to Cog)
         return response

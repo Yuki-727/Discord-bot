@@ -16,12 +16,31 @@ ROLEPLAY CONTEXT:
 - Your energy level is {state.get('energy', 100)}%.
 
 RECENT MEMORIES & CONTEXT:
+{self._format_summary(memories.get('summary'))}
 {context_summary}
 
+VECTOR SEARCH (Long-term Facts):
 {memories.get('semantic', '')}
 
 Maintain a natural, conversational tone. Do not mention you are an AI unless asked.
 """
         return prompt
+
+    def _format_summary(self, summary):
+        if not summary:
+            return ""
+        
+        import json
+        try:
+            kp = json.loads(summary['key_points']) if isinstance(summary['key_points'], str) else summary['key_points']
+            kp_str = "\n- ".join(kp)
+            return f"""PREVIOUS CONVERSATION SUMMARY:
+Topic: {summary['topic']}
+Narrative: {summary['content']}
+Key Points:
+- {kp_str}
+"""
+        except:
+            return f"PREVIOUS CONVERSATION SUMMARY: {summary['content']}"
 
 prompt_builder = PromptBuilder()
