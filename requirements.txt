@@ -2,3 +2,5 @@ discord.py
 httpx
 python-dotenv
 groq
+chromadb
+sentence-transformers

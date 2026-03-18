@@ -27,7 +27,7 @@ class MessagePipeline:
             return handler_type
         
         # 6. Memory Retrieval & 5. State Load
-        memories = memory_manager.get_context(user_id, channel_id)
+        memories = memory_manager.get_context(user_id, channel_id, query_text=normalized_text)
         state = character_state.load_state()
         
         # 7. Context Builder (Optimization)
