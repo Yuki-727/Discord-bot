@@ -102,7 +102,8 @@ class ChatCog(commands.Cog):
             user_id=str(ctx.author.id),
             username=ctx.author.name,
             message_text=text,
-            bot_id=str(self.bot.user.id)
+            bot_id=str(self.bot.user.id),
+            forced_confidence=1.0 # NEW
         )
         if response:
             from ..core.cooldown import cooldown_manager
@@ -117,7 +118,8 @@ class ChatCog(commands.Cog):
             user_id=str(interaction.user.id),
             username=interaction.user.name,
             message_text=text,
-            bot_id=str(self.bot.user.id)
+            bot_id=str(self.bot.user.id),
+            forced_confidence=1.0 # NEW
         )
         if response:
             from ..core.cooldown import cooldown_manager

@@ -32,7 +32,11 @@ class CharacterState:
         """
         Updates NIA's internal state based on the AI's behavior analysis.
         """
+        import logging
+        logger = logging.getLogger("yuki")
+        
         state = self.load_state()
+        old_state = state.copy()
         
         # 1. Topic update
         state["current_topic"] = behavior_analysis.get("summary", state.get("current_topic"))
@@ -51,6 +55,7 @@ class CharacterState:
         elif "sad" in tone:
             state["mood"] = "thoughtful"
         
+        logger.info(f"DEBUG [CharacterState]: NIA STATE UPDATE: {old_state['mood']} -> {state['mood']} (Energy: {state['energy']})")
         self.save_state(state)
 
 character_state = CharacterState()

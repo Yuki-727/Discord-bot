@@ -56,28 +56,31 @@ class MessagePipeline:
         state = character_state.load_state()
         
         # 8. Context Builder with YOU labeling
-        history_lines = []
-        for uid, name, content in memories['short_term']:
-            display_name = "YOU" if str(uid) == str(bot_id) or name.lower() == "nia" else name
-            history_lines.append(f"{display_name}: {content}")
-        context_summary = "\n".join(history_lines)
-        
-        # 9. Analyze Phase (Think Step)
+
+        # 8. Analyze Phase (Think Step)
         from ..processing.behavior_analyzer import behavior_analyzer
         behavior_analysis = await behavior_analyzer.analyze(normalized_text, username, intent_data)
         logger.info(f"DEBUG [Analysis]: Action={behavior_analysis['action']}, Reasoning={behavior_analysis.get('reasoning', {}).get('best_action')}")
         
         # 9. Prompt Builder
+        from ..ai.prompt_builder import prompt_builder
         reasoning = behavior_analysis.get('reasoning', {})
         analysis_summary = (
             f"SUMMARY: {behavior_analysis['summary']}\n"
             f"STRATEGY: {behavior_analysis['action']} -> {reasoning.get('best_action', 'reply')}\n"
             f"TONE: {reasoning.get('tone', 'neutral')}"
         )
-        combined_context = f"{context_summary}\n\nANALYSIS:\n{analysis_summary}"
-        system_prompt = prompt_builder.build_system_prompt(state, memories, combined_context)
+        context_lines = []
+        for uid, name, content in recent_context['short_term']:
+            display_name = "YOU" if str(uid) == str(bot_id) or name.lower() == "nia" else name
+            context_lines.append(f"{display_name}: {content}")
+        context_history = "\n".join(context_lines)
         
-        # 10. LLM Call
+        combined_context = f"{context_history}\n\nANALYSIS:\n{analysis_summary}"
+        system_prompt = prompt_builder.build_system_prompt(state, recent_context['semantic'], combined_context)
+        
+        # 10. Generation (LLM Call)
+        from ..ai.client import ai_client
         messages = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": f"{username}: {normalized_text}"}
@@ -89,19 +92,16 @@ class MessagePipeline:
         
         # 11a. [NEW] Imperfections (Typos, Prefixes)
         if response:
-            # Deja Vu check (30% if similarity > 0.9)
-            # (Requires semantic_memory query which is already in context)
-            
             response = humanization_engine.apply_imperfections(response, behavior_analysis)
 
         # 12. State & 13. Memory Update
-        character_state.update_from_interaction(behavior_analysis) # Updated state management
+        character_state.update_from_interaction(behavior_analysis)
+        logger.info(f"DEBUG [State Update]: Character state updated based on interaction.")
         memory_manager.update_memory(channel_id, user_id, username, normalized_text, response)
         
-        # 14. [NEW] Background Semantic Extraction & Summarization (Parallel)
+        # 14. [NEW] Background Semantic Extraction (Parallel)
         from ..memory.semantic_memory import semantic_memory
         asyncio.create_task(semantic_memory.extract_facts(user_id, username, normalized_text, response))
-        asyncio.create_task(memory_manager.summarize_history(channel_id))
         
         # 15. Reply (Returned to Cog)
         return response

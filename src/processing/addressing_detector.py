@@ -102,9 +102,9 @@ Return JSON: {{"is_addressing_bot": bool, "confidence": float}}
         # aw (60%) + cs (20%) + kc (10%) + mm (10%)
         final_confidence = (aw * 0.60) + (cs * 0.20) + (kc * 0.10) + (mm * 0.10)
         
-        # Decide
+        # Decide (Threshold lowered to 0.55 as requested)
         # Strict: must have some AW or very high CS
-        is_addressed = (aw > 0.4 and is_addressing_bot_ai) or (final_confidence >= 0.6)
+        is_addressed = (aw > 0.4 and is_addressing_bot_ai) or (final_confidence >= 0.55)
 
         return {
             "is_addressed": is_addressed,
@@ -112,4 +112,4 @@ Return JSON: {{"is_addressing_bot": bool, "confidence": float}}
             "reason": f"AW={aw:.2f}, CS={cs:.2f} (TS={ts:.2f})"
         }
 
-addressing_detector = AddressingDetector(bot_name="Nia", nicknames=["yuki"])
+addressing_detector = AddressingDetector(bot_name="Nia", nicknames=["nia"])
