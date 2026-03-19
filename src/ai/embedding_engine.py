@@ -29,4 +29,14 @@ class EmbeddingEngine:
         result = self.vo.embed(texts, model=self.model)
         return result.embeddings
 
+    @staticmethod
+    def cosine_similarity(v1, v2):
+        from math import sqrt
+        dot_product = sum(a * b for a, b in zip(v1, v2))
+        magnitude1 = sqrt(sum(a * a for a in v1))
+        magnitude2 = sqrt(sum(b * b for b in v2))
+        if magnitude1 == 0 or magnitude2 == 0:
+            return 0.0
+        return dot_product / (magnitude1 * magnitude2)
+
 embedding_engine = EmbeddingEngine()

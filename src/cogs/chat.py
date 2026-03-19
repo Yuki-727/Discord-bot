@@ -1,3 +1,6 @@
+import asyncio
+import random
+import re
 import discord
 from discord.ext import commands
 from ..core.pipeline import pipeline
@@ -5,62 +8,106 @@ from ..core.pipeline import pipeline
 class ChatCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+        self.msg_buffers = {} # (channel_id, user_id) -> [messages]
+        self.buffer_tasks = {} # (channel_id, user_id) -> asyncio.Task
 
     @commands.Cog.listener()
     async def on_message(self, message):
-        # 1. Receive & Skip Bots
         if message.author.bot:
             return
-        
+
         from ..core.database import db
-        from ..core.cooldown import cooldown_manager
-        
         channel_id = str(message.channel.id)
         user_id = str(message.author.id)
+        
+        # We only buffer for monitored channels or DMs
         is_monitored = db.is_channel_monitored(channel_id)
         is_dm = isinstance(message.channel, discord.DMChannel)
-        
-        # Determine if we should process this message
-        # We process if: it's a DM, it starts with prefix, or channel is monitored.
         is_command = message.content.startswith(self.bot.command_prefix)
+
+        if not (is_monitored or is_dm or is_command):
+            return
+
+        # Buffering logic (5s wait)
+        key = (channel_id, user_id)
+        if key not in self.msg_buffers:
+            self.msg_buffers[key] = []
         
-        if is_dm or is_command or is_monitored:
-            # Check Cooldown for passive reads (not commands and not DMs)
-            on_cooldown = cooldown_manager.is_on_cooldown(user_id)
+        self.msg_buffers[key].append(message.content)
+
+        # Reset/Start timer
+        if key in self.buffer_tasks:
+            self.buffer_tasks[key].cancel()
+        
+        self.buffer_tasks[key] = asyncio.create_task(self._process_buffer_task(message, key))
+
+    async def _process_buffer_task(self, original_message, key):
+        try:
+            await asyncio.sleep(5.0)
+            messages = self.msg_buffers.pop(key, [])
+            if not messages: return
             
-            # Run Pipeline
-            # Note: We pass everything. Pipeline's AddressingDetector will decide if we reply.
-            response = await pipeline.run(
-                channel_id=channel_id,
-                user_id=user_id,
-                username=message.author.name,
-                message_text=message.content,
-                bot_id=str(self.bot.user.id)
-            )
-            
-            # Decide whether to send the reply to Discord
-            if response and response != "[Overheard]":
-                # Only reply if not on cooldown or it's a direct command/DM
-                if not on_cooldown or is_command or is_dm:
-                    async with message.channel.typing():
-                        await message.reply(response)
-                        # Set/Reset cooldown after any successful response
-                        cooldown_manager.set_cooldown(user_id)
+            combined_text = "\n".join(messages)
+            await self._process_merged_message(original_message, combined_text)
+        except asyncio.CancelledError:
+            pass
+        finally:
+            self.buffer_tasks.pop(key, None)
+
+    async def _process_merged_message(self, message, combined_text):
+        from ..core.cooldown import cooldown_manager
+        channel_id = str(message.channel.id)
+        user_id = str(message.author.id)
+        is_dm = isinstance(message.channel, discord.DMChannel)
+        is_command = combined_text.startswith(self.bot.command_prefix)
+
+        on_cooldown = cooldown_manager.is_on_cooldown(user_id)
+        
+        response = await pipeline.run(
+            channel_id=channel_id,
+            user_id=user_id,
+            username=message.author.name,
+            message_text=combined_text,
+            bot_id=str(self.bot.user.id)
+        )
+
+        if response and response != "[Overheard]":
+            if not on_cooldown or is_command or is_dm:
+                await self._send_split_response(message.channel, message, response)
+                cooldown_manager.set_cooldown(user_id)
+
+    async def _send_split_response(self, channel, original_message, response):
+        # Split by sentences or newlines
+        parts = re.split(r'(?<=[.!?])\s+|\n+', response)
+        parts = [p.strip() for p in parts if p.strip()]
+
+        for i, part in enumerate(parts):
+            async with channel.typing():
+                # Delay = (chars * 0.033) + random(-2, 2)
+                # 30 chars per sec -> 1/30 = 0.033
+                delay = (len(part) * 0.033) + random.uniform(-2, 2)
+                # Min delay 2s for first part, 1s for subsequent
+                min_wait = 2.0 if i == 0 else 1.0
+                await asyncio.sleep(max(min_wait, delay))
+                
+                if i == 0:
+                    await original_message.reply(part)
+                else:
+                    await channel.send(part)
 
     @commands.command(name="chat")
     async def chat_command(self, ctx, *, text: str):
-        async with ctx.typing():
-            response = await pipeline.run(
-                channel_id=str(ctx.channel.id),
-                user_id=str(ctx.author.id),
-                username=ctx.author.name,
-                message_text=text,
-                bot_id=str(self.bot.user.id)
-            )
-            if response:
-                from ..core.cooldown import cooldown_manager
-                cooldown_manager.set_cooldown(str(ctx.author.id))
-                await ctx.reply(response)
+        response = await pipeline.run(
+            channel_id=str(ctx.channel.id),
+            user_id=str(ctx.author.id),
+            username=ctx.author.name,
+            message_text=text,
+            bot_id=str(self.bot.user.id)
+        )
+        if response:
+            from ..core.cooldown import cooldown_manager
+            cooldown_manager.set_cooldown(str(ctx.author.id))
+            await self._send_split_response(ctx.channel, ctx.message, response)
 
     @discord.app_commands.command(name="chat", description="Chat with Nia!")
     async def chat_slash(self, interaction: discord.Interaction, text: str):
@@ -75,7 +122,14 @@ class ChatCog(commands.Cog):
         if response:
             from ..core.cooldown import cooldown_manager
             cooldown_manager.set_cooldown(str(interaction.user.id))
-            await interaction.followup.send(response)
+            # For slash commands, we send the first part as followup then the rest
+            parts = re.split(r'(?<=[.!?])\s+|\n+', response)
+            parts = [p.strip() for p in parts if p.strip()]
+            for i, part in enumerate(parts):
+                if i == 0:
+                    await interaction.followup.send(part)
+                else:
+                    await interaction.channel.send(part)
         else:
             await interaction.followup.send("*(Nia overhears this but stays silent)*", ephemeral=True)
 

@@ -19,7 +19,7 @@ class MessagePipeline:
         
         # 4. [NEW] Addressing Detection
         from ..processing.addressing_detector import addressing_detector
-        recent_context = memory_manager.get_context(user_id, channel_id, query_text=None)['short_term']
+        recent_context = memory_manager.get_context(user_id, channel_id, query_text=None)
         address_check = await addressing_detector.check_addressing(normalized_text, username, recent_context, bot_id)
         
         # DEBUG LOGGING for User

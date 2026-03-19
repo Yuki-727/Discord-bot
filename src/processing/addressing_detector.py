@@ -9,48 +9,35 @@ class AddressingDetector:
         self.nicknames = [n.lower() for n in nicknames] if nicknames else ["nia"]
         self.pronouns = ["cậu", "bạn", "mày", "you", "your", "you're", "u", "em", "anh", "chị"]
 
-    async def check_addressing(self, text, username, recent_messages, bot_id):
+    async def check_addressing(self, text, username, recent_context, bot_id):
         """
-        Calculates confidence that the message is addressing the bot.
-        Returns: { "is_addressed": bool, "confidence": float, "reason": str }
+        Calculates confidence using the new weighted formula (Phase 16).
+        recent_context: { short_term: [...], summary: {...}, semantic: "..." }
         """
-        text_lower = text.lower()
-        confidence = 0.0
-        reason = "No obvious addressing."
+        from ..ai.embedding_engine import embedding_engine
+        import time
 
-        # 1. Base Checks (Tags & Names)
+        text_lower = text.lower()
+        recent_messages = recent_context.get('short_term', [])
+        
+        # --- Part 1: AW (Addressing Weight - 50%) ---
+        # Rule-based detection
+        rule_conf = 0.0
         is_tagged = str(bot_id) in text or f"<@!{bot_id}>" in text or f"<@{bot_id}>" in text
         has_name = self.bot_name in text_lower or any(n in text_lower for n in self.nicknames)
-        is_vague = any(word in text_lower for word in ["mọi người", "everyone", "ai biết", "giúp với"])
-
-        if is_tagged:
-            confidence = 0.95
-            reason = "Directly tagged."
-        elif has_name:
-            confidence = 0.55
-            reason = "Name mentioned."
-        elif is_vague:
-            confidence = 0.40
-            reason = "Vague call to everyone/anyone."
-
-        # 2. Context Override (+0.2 if pronouns used and Nia was recently active)
-        # Check if Nia was mentioned or spoke in the last 5 messages
+        
+        if is_tagged: rule_conf = 0.95
+        elif has_name: rule_conf = 0.55
+        
+        # AI-based detection (if name/tag present or Nia active)
         nia_active_recently = any(
-            (self.bot_name in msg[2].lower() or msg[1].lower() == "nia" or msg[1].lower() == "yuki")
-            for msg in recent_messages[-5:]
+            (self.bot_name in msg[2].lower() or msg[1].lower() == "nia")
+            for msg in recent_messages[-3:] # Check last 3 for "carry"
         )
         
-        has_pronoun = any(re.search(rf"\b{p}\b", text_lower) for p in self.pronouns)
-        
-        if nia_active_recently and has_pronoun:
-            confidence += 0.4 # Boooost
-            reason += " (Follow-up Continuity detected)"
-
-        confidence = min(1.0, confidence)
-
-        # 3. AI Refinement (The "Thinking" Step)
-        # Trigger AI if we have some confidence OR Nia was active recently (to catch short follow-ups)
-        if confidence > 0.1 or nia_active_recently:
+        ai_conf = 0.0
+        is_addressing_bot_ai = False
+        if rule_conf > 0.1 or nia_active_recently:
             context_str = "\n".join([f"{m[1]}: {m[2]}" for m in recent_messages[-5:]])
             prompt = f"""Is the latest message from {username} directed at Nia?
 CONTEXT:
@@ -60,34 +47,61 @@ LATEST MESSAGE:
 {username}: "{text}"
 
 Guidelines:
-- If Nia was the last person to speak, and {username} is using pronouns (you, cậu, bạn...), they are likely talking TO Nia.
-- If they are just talking about Nia to someone else, is_addressing_bot = false.
-- Focus on continuity. Is this a reply to what Nia just said?
-
-Return JSON:
-{{
-  "is_addressing_bot": true/false,
-  "confidence": 0-1,
-  "reason": "short explanation"
-}}
+- Directed at Nia? is_addressing_bot = true.
+- Talking about Nia to someone else? is_addressing_bot = false.
+Return JSON: {{"is_addressing_bot": bool, "confidence": float}}
 """
             try:
                 raw = await ai_client.generate_response([{"role": "user", "content": prompt}])
                 data = json.loads(raw.strip().strip("```json").strip("```"))
-                # Blend rule-based and AI-based
-                final_conf = (confidence + data['confidence']) / 2
-                return {
-                    "is_addressed": final_conf >= 0.6 and data['is_addressing_bot'],
-                    "confidence": min(1.0, final_conf),
-                    "reason": data['reason']
-                }
-            except:
-                pass
+                ai_conf = data.get('confidence', 0.0)
+                is_addressing_bot_ai = data.get('is_addressing_bot', False)
+            except: pass
+
+        aw = (rule_conf + ai_conf) / 2 if ai_conf > 0 else rule_conf
+
+        # --- Part 2: CS (Context Strength - 15%) ---
+        # CS = (0.55 * TS) + (0.25 * TP) + (0.2 * AC)
+        
+        # TS: Topic Similarity
+        ts = 0.0
+        curr_vector = embedding_engine.embed_text(text)
+        prev_text = recent_messages[-1][2] if recent_messages else ""
+        if not prev_text and recent_context.get('summary'):
+            prev_text = recent_context['summary'].get('content', "")
+        
+        if prev_text:
+            prev_vector = embedding_engine.embed_text(prev_text)
+            ts = embedding_engine.cosine_similarity(curr_vector, prev_vector)
+        
+        # TP: Time Proximity (Decay over 60 seconds)
+        tp = 0.0
+        # For simplicity, we assume messages are incoming fast. 
+        # In a real scenario, we'd check timestamps from DB. 
+        # Since we don't have absolute wall-clock easily, we'll assume 1.0 if Nia spoke last.
+        if recent_messages and recent_messages[-1][1].lower() == "nia":
+            tp = 1.0
+            
+        # AC: Addressing Carry
+        ac = 1.0 if nia_active_recently else 0.0
+        
+        cs = (0.55 * ts) + (0.25 * tp) + (0.2 * ac)
+
+        # --- Part 3: KC & MM (35%) ---
+        kc = 1.0 # Knowledge Confidence (Assumed high for simple chat)
+        mm = 1.0 # Mood Modifier (Static for now)
+
+        # --- Final Formula ---
+        final_confidence = (aw * 0.50) + (cs * 0.15) + (kc * 0.25) + (mm * 0.10)
+        
+        # Decide
+        # Strict: must have some AW or very high CS
+        is_addressed = (aw > 0.4 and is_addressing_bot_ai) or (final_confidence >= 0.6)
 
         return {
-            "is_addressed": confidence >= 0.6,
-            "confidence": confidence,
-            "reason": reason
+            "is_addressed": is_addressed,
+            "confidence": min(1.0, final_confidence),
+            "reason": f"AW={aw:.2f}, CS={cs:.2f} (TS={ts:.2f})"
         }
 
 addressing_detector = AddressingDetector(bot_name="Nia", nicknames=["yuki"])
