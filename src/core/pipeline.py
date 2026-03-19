@@ -64,8 +64,8 @@ class MessagePipeline:
         
         # 9. Analyze Phase (Think Step)
         from ..processing.behavior_analyzer import behavior_analyzer
-        analysis = await behavior_analyzer.analyze(normalized_text, username, intent_data)
-        logger.info(f"DEBUG [Analysis]: Action={analysis['action']}, Reasoning={analysis.get('reasoning', {}).get('best_action')}")
+        behavior_analysis = await behavior_analyzer.analyze(normalized_text, username, intent_data)
+        logger.info(f"DEBUG [Analysis]: Action={behavior_analysis['action']}, Reasoning={behavior_analysis.get('reasoning', {}).get('best_action')}")
         
         # 9. Prompt Builder
         reasoning = behavior_analysis.get('reasoning', {})
