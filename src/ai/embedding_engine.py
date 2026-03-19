@@ -1,51 +1,60 @@
 import os
-import numpy as np
-from sentence_transformers import SentenceTransformer
+import httpx
+import time
 
 class EmbeddingEngine:
     def __init__(self):
-        # Using a very lightweight local model (approx 80MB)
-        # Dimensions: 384
-        try:
-            self.model_name = "all-MiniLM-L6-v2"
-            self.model = SentenceTransformer(self.model_name)
-            print(f"INFO: Local Embedding Engine initialized with {self.model_name}")
-        except Exception as e:
-            print(f"ERROR: Local Embedding initialization failed: {e}")
-            self.model = None
+        self.api_key = os.getenv("HF_TOKEN")
+        self.model_id = "sentence-transformers/all-MiniLM-L6-v2"
+        self.api_url = f"https://api-inference.huggingface.co/pipeline/feature-extraction/{self.model_id}"
+        
+        if not self.api_key:
+            print("WARNING: HF_TOKEN not found in environment. Embeddings will be offline.")
 
     def embed_text(self, text):
         """
-        Converts text into a vector embedding locally.
+        Converts text into a vector embedding using Hugging Face Inference API.
+        Dimensions: 384
         """
-        if not self.model:
-            return [0.0] * 384 # Fallback
+        if not self.api_key:
+            return [0.0] * 384
             
+        headers = {"Authorization": f"Bearer {self.api_key}"}
         try:
-            embedding = self.model.encode([text])[0]
-            return embedding.tolist()
+            with httpx.Client(timeout=10.0) as client:
+                response = client.post(self.api_url, headers=headers, json={"inputs": [text]})
+                if response.status_code == 200:
+                    return response.json()[0]
+                else:
+                    print(f"ERROR: HuggingFace API {response.status_code}: {response.text}")
+                    return [0.0] * 384
         except Exception as e:
-            print(f"ERROR: Local Embedding failed: {e}")
+            print(f"ERROR: HuggingFace Embedding failed: {e}")
             return [0.0] * 384
 
     def embed_batch(self, texts):
         """
-        Converts a list of texts into vector embeddings locally.
+        Converts a list of texts into vector embeddings using Hugging Face Inference API.
         """
-        if not self.model:
+        if not self.api_key:
             return [[0.0] * 384 for _ in texts]
             
+        headers = {"Authorization": f"Bearer {self.api_key}"}
         try:
-            embeddings = self.model.encode(texts)
-            return embeddings.tolist()
+            with httpx.Client(timeout=15.0) as client:
+                response = client.post(self.api_url, headers=headers, json={"inputs": texts})
+                if response.status_code == 200:
+                    return response.json()
+                else:
+                    print(f"ERROR: HuggingFace Batch API {response.status_code}: {response.text}")
+                    return [[0.0] * 384 for _ in texts]
         except Exception as e:
-            print(f"ERROR: Local Batch Embedding failed: {e}")
+            print(f"ERROR: HuggingFace Batch failed: {e}")
             return [[0.0] * 384 for _ in texts]
 
     @staticmethod
     def cosine_similarity(v1, v2):
         from math import sqrt
-        # Ensure vectors have same dimension
         dim = min(len(v1), len(v2))
         v1, v2 = v1[:dim], v2[:dim]
         

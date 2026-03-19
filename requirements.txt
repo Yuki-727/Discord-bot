@@ -3,5 +3,3 @@ httpx
 python-dotenv
 groq
 chromadb
-sentence-transformers
-numpy
