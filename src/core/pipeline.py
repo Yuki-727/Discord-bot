@@ -1,3 +1,8 @@
+import asyncio
+import logging
+from ..ai.client import ai_client
+from ..ai.prompt_builder import prompt_builder
+
 logger = logging.getLogger(__name__)
 
 class MessagePipeline:
