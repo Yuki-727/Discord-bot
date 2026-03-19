@@ -9,19 +9,20 @@ class SemanticMemory:
     def __init__(self, db_path="./data/chroma_db"):
         # Ensure data directory exists
         os.makedirs(db_path, exist_ok=True)
-        
         self.client = chromadb.PersistentClient(path=db_path)
+        
         try:
             self.collection = self.client.get_or_create_collection(
                 name="user_facts",
                 metadata={"hnsw:space": "cosine"}
             )
-            # Peek to trigger a potential dimension check error immediately
-            if self.collection.count() > 0:
-                self.collection.peek()
+            # Force a real check by querying with a 384-dim vector
+            # This will raise InvalidArgumentError if the collection is 512-dim
+            self.collection.query(query_embeddings=[[0.0]*384], n_results=1)
         except Exception as e:
-            if "dimension" in str(e).lower() or "Invalid" in str(e):
-                print(f"DEBUG: Dimension mismatch or corrupted collection ({e}). Recreating...")
+            error_msg = str(e).lower()
+            if "dimension" in error_msg or "invalid" in error_msg or "expecting" in error_msg:
+                print(f"DEBUG: Dimension mismatch detected ({e}). Recreating collection...")
                 try:
                     self.client.delete_collection("user_facts")
                 except:
@@ -31,7 +32,8 @@ class SemanticMemory:
                     metadata={"hnsw:space": "cosine"}
                 )
             else:
-                raise e
+                # If it's a different error (like a timeout), we just log it
+                print(f"WARNING: Initial collection check failed: {e}")
 
     async def extract_facts(self, user_id, username, message_text, response_text):
         """
