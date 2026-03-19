@@ -77,7 +77,7 @@ class MessagePipeline:
         context_history = "\n".join(context_lines)
         
         combined_context = f"{context_history}\n\nANALYSIS:\n{analysis_summary}"
-        system_prompt = prompt_builder.build_system_prompt(state, recent_context['semantic'], combined_context)
+        system_prompt = prompt_builder.build_system_prompt(state, recent_context, combined_context)
         
         # 10. Generation (LLM Call)
         from ..ai.client import ai_client
