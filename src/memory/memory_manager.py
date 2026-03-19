@@ -39,7 +39,7 @@ class MemoryManager:
 
     def update_memory(self, channel_id, user_id, username, message, response):
         db.log_message(channel_id, user_id, username, message)
-        db.log_message(channel_id, "bot_assistant", "Yuki", response)
+        db.log_message(channel_id, "bot_assistant", "Nia", response)
 
     async def summarize_history(self, channel_id):
         """

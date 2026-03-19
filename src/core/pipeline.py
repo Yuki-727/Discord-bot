@@ -1,8 +1,3 @@
-import asyncio
-import logging
-from ..ai.client import ai_client
-from ..ai.prompt_builder import prompt_builder
-
 logger = logging.getLogger(__name__)
 
 class MessagePipeline:
@@ -10,6 +5,8 @@ class MessagePipeline:
         pass
 
     async def run(self, channel_id, user_id, username, message_text, bot_id):
+        from ..memory.memory_manager import memory_manager
+        from ..state.character_state import character_state
         # 1. Receive & 2. Filter (Handled by Cog)
         
         # 3. Normalize Text
