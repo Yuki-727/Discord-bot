@@ -16,8 +16,12 @@ class EmbeddingEngine:
         if not self.vo:
             return [0.0] * 512 # Fallback
             
-        result = self.vo.embed([text], model=self.model)
-        return result.embeddings[0]
+        try:
+            result = self.vo.embed([text], model=self.model)
+            return result.embeddings[0]
+        except Exception as e:
+            print(f"ERROR: Voyage Embedding failed: {e}")
+            return [0.0] * 512
 
     def embed_batch(self, texts):
         """
@@ -26,8 +30,12 @@ class EmbeddingEngine:
         if not self.vo:
             return [[0.0] * 512 for _ in texts]
             
-        result = self.vo.embed(texts, model=self.model)
-        return result.embeddings
+        try:
+            result = self.vo.embed(texts, model=self.model)
+            return result.embeddings
+        except Exception as e:
+            print(f"ERROR: Voyage Batch Embedding failed: {e}")
+            return [[0.0] * 512 for _ in texts]
 
     @staticmethod
     def cosine_similarity(v1, v2):
