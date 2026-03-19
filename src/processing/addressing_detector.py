@@ -7,7 +7,7 @@ class AddressingDetector:
     def __init__(self, bot_name="Nia", nicknames=None):
         self.bot_name = bot_name.lower()
         self.nicknames = [n.lower() for n in nicknames] if nicknames else ["nia"]
-        self.pronouns = ["cậu", "bạn", "mày", "you", "em", "anh", "chị"]
+        self.pronouns = ["cậu", "bạn", "mày", "you", "your", "you're", "u", "em", "anh", "chị"]
 
     async def check_addressing(self, text, username, recent_messages, bot_id):
         """
