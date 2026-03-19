@@ -1,8 +1,9 @@
 import asyncio
+import logging
 from ..ai.client import ai_client
 from ..ai.prompt_builder import prompt_builder
-from ..memory.memory_manager import memory_manager
-from ..state.character_state import character_state
+
+logger = logging.getLogger(__name__)
 
 class MessagePipeline:
     def __init__(self):
@@ -20,7 +21,7 @@ class MessagePipeline:
         address_check = await addressing_detector.check_addressing(normalized_text, username, recent_context, bot_id)
         
         # DEBUG LOGGING for User
-        print(f"DEBUG [Addressing]: User={username}, Text='{normalized_text[:50]}...', Confidence={address_check['confidence']:.2f}, Reason='{address_check['reason']}'")
+        logger.info(f"DEBUG [Addressing]: User={username}, Text='{normalized_text[:50]}...', Confidence={address_check['confidence']:.2f}, Reason='{address_check['reason']}'")
         
         is_dm = channel_id == user_id 
         is_addressed = address_check['is_addressed'] or is_dm
@@ -62,7 +63,7 @@ class MessagePipeline:
         # 9. Analyze Phase (Think Step)
         from ..processing.behavior_analyzer import behavior_analyzer
         analysis = await behavior_analyzer.analyze(normalized_text, username, intent_data)
-        print(f"DEBUG [Analysis]: Action={analysis['action']}, Reasoning={analysis.get('reasoning', {}).get('best_action')}")
+        logger.info(f"DEBUG [Analysis]: Action={analysis['action']}, Reasoning={analysis.get('reasoning', {}).get('best_action')}")
         
         # 9. Prompt Builder
         reasoning = analysis.get('reasoning', {})
