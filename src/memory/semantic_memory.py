@@ -11,10 +11,27 @@ class SemanticMemory:
         os.makedirs(db_path, exist_ok=True)
         
         self.client = chromadb.PersistentClient(path=db_path)
-        self.collection = self.client.get_or_create_collection(
-            name="user_facts",
-            metadata={"hnsw:space": "cosine"} # Use cosine similarity for better semantic matching
-        )
+        try:
+            self.collection = self.client.get_or_create_collection(
+                name="user_facts",
+                metadata={"hnsw:space": "cosine"}
+            )
+            # Peek to trigger a potential dimension check error immediately
+            if self.collection.count() > 0:
+                self.collection.peek()
+        except Exception as e:
+            if "dimension" in str(e).lower() or "Invalid" in str(e):
+                print(f"DEBUG: Dimension mismatch or corrupted collection ({e}). Recreating...")
+                try:
+                    self.client.delete_collection("user_facts")
+                except:
+                    pass
+                self.collection = self.client.create_collection(
+                    name="user_facts",
+                    metadata={"hnsw:space": "cosine"}
+                )
+            else:
+                raise e
 
     async def extract_facts(self, user_id, username, message_text, response_text):
         """
