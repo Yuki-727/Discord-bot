@@ -43,7 +43,7 @@ class ChatCog(commands.Cog):
 
     async def _process_buffer_task(self, original_message, key):
         try:
-            await asyncio.sleep(5.0)
+            await asyncio.sleep(1.0) # Reduced from 5.0
             messages = self.msg_buffers.pop(key, [])
             if not messages: return
             
@@ -83,11 +83,11 @@ class ChatCog(commands.Cog):
 
         for i, part in enumerate(parts):
             async with channel.typing():
-                # Delay = (chars * 0.033) + random(-2, 2)
-                # 30 chars per sec -> 1/30 = 0.033
-                delay = (len(part) * 0.033) + random.uniform(-2, 2)
-                # Min delay 2s for first part, 1s for subsequent
-                min_wait = 2.0 if i == 0 else 1.0
+                # Delay = (chars * 0.022) + random(-1, 1)
+                # 45 chars per sec -> 1/45 = 0.022
+                delay = (len(part) * 0.022) + random.uniform(-1, 1)
+                # Min delay 1s for first part, 0.5s for subsequent
+                min_wait = 1.0 if i == 0 else 0.5
                 await asyncio.sleep(max(min_wait, delay))
                 
                 if i == 0:

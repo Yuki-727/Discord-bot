@@ -26,17 +26,24 @@ class AddressingDetector:
         is_tagged = str(bot_id) in text or f"<@!{bot_id}>" in text or f"<@{bot_id}>" in text
         has_name = self.bot_name in text_lower or any(n in text_lower for n in self.nicknames)
         
-        if is_tagged: rule_conf = 0.95
-        elif has_name: rule_conf = 0.55
-        
-        # AI-based detection (if name/tag present or Nia active)
+        # Check last 3 for "carry"
         nia_active_recently = any(
             (self.bot_name in msg[2].lower() or msg[1].lower() == "nia")
-            for msg in recent_messages[-3:] # Check last 3 for "carry"
+            for msg in recent_messages[-3:]
         )
+
+        has_pronoun = any(re.search(rf"\b{p}\b", text_lower) for p in self.pronouns)
         
+        if is_tagged: 
+            rule_conf = 0.95
+        elif has_name: 
+            rule_conf = 0.55
+        elif has_pronoun and nia_active_recently:
+            rule_conf = 0.45 # Moderate confidence if following up with a pronoun
+
         ai_conf = 0.0
         is_addressing_bot_ai = False
+        # Trigger AI if some rules met or Nia active
         if rule_conf > 0.1 or nia_active_recently:
             context_str = "\n".join([f"{m[1]}: {m[2]}" for m in recent_messages[-5:]])
             prompt = f"""Is the latest message from {username} directed at Nia?
@@ -87,12 +94,13 @@ Return JSON: {{"is_addressing_bot": bool, "confidence": float}}
         
         cs = (0.55 * ts) + (0.25 * tp) + (0.2 * ac)
 
-        # --- Part 3: KC & MM (35%) ---
-        kc = 1.0 # Knowledge Confidence (Assumed high for simple chat)
-        mm = 1.0 # Mood Modifier (Static for now)
+        # --- Part 3: KC & MM (20%) ---
+        kc = 1.0 # Knowledge Confidence
+        mm = 1.0 # Mood Modifier
 
-        # --- Final Formula ---
-        final_confidence = (aw * 0.50) + (cs * 0.15) + (kc * 0.25) + (mm * 0.10)
+        # --- Final Formula (Stricter weights - Phase 16.5) ---
+        # aw (60%) + cs (20%) + kc (10%) + mm (10%)
+        final_confidence = (aw * 0.60) + (cs * 0.20) + (kc * 0.10) + (mm * 0.10)
         
         # Decide
         # Strict: must have some AW or very high CS
