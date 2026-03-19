@@ -43,22 +43,26 @@ class AddressingDetector:
         has_pronoun = any(re.search(rf"\b{p}\b", text_lower) for p in self.pronouns)
         
         if nia_active_recently and has_pronoun:
-            confidence += 0.2
-            reason += " (Context Override: Pronoun + Recent Activity)"
+            confidence += 0.4 # Boooost
+            reason += " (Follow-up Continuity detected)"
+
+        confidence = min(1.0, confidence)
 
         # 3. AI Refinement (The "Thinking" Step)
-        if confidence > 0.3:
+        # Trigger AI if we have some confidence OR Nia was active recently (to catch short follow-ups)
+        if confidence > 0.1 or nia_active_recently:
             context_str = "\n".join([f"{m[1]}: {m[2]}" for m in recent_messages[-5:]])
-            prompt = f"""Is the User ({username}) addressing the AI (Nia) in this message?
+            prompt = f"""Is the latest message from {username} directed at Nia?
 CONTEXT:
 {context_str}
 
 LATEST MESSAGE:
 {username}: "{text}"
 
-Analyze:
-- Is Nia the second person (being talk TO)?
-- Or is Nia the third person (being talked ABOUT)?
+Guidelines:
+- If Nia was the last person to speak, and {username} is using pronouns (you, cậu, bạn...), they are likely talking TO Nia.
+- If they are just talking about Nia to someone else, is_addressing_bot = false.
+- Focus on continuity. Is this a reply to what Nia just said?
 
 Return JSON:
 {{
@@ -73,8 +77,8 @@ Return JSON:
                 # Blend rule-based and AI-based
                 final_conf = (confidence + data['confidence']) / 2
                 return {
-                    "is_addressed": final_conf >= 0.6 and data['is_addressing_bot'],
-                    "confidence": final_conf,
+                    "is_addressed": final_conf >= 0.5 or (data['is_addressing_bot'] and data['confidence'] > 0.7),
+                    "confidence": min(1.0, final_conf),
                     "reason": data['reason']
                 }
             except:
