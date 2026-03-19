@@ -77,7 +77,7 @@ Return JSON:
                 # Blend rule-based and AI-based
                 final_conf = (confidence + data['confidence']) / 2
                 return {
-                    "is_addressed": final_conf >= 0.5 or (data['is_addressing_bot'] and data['confidence'] > 0.7),
+                    "is_addressed": final_conf >= 0.6 and data['is_addressing_bot'],
                     "confidence": min(1.0, final_conf),
                     "reason": data['reason']
                 }
