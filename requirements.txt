@@ -3,4 +3,5 @@ httpx
 python-dotenv
 groq
 chromadb
-voyageai
+sentence-transformers
+numpy
