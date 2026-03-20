@@ -59,11 +59,21 @@ Return ONLY a JSON array of objects:
 """
         try:
             raw_response = await ai_client.generate_response([{"role": "user", "content": prompt}])
-            cleaned_json = raw_response.strip()
-            if "```json" in cleaned_json:
-                cleaned_json = cleaned_json.split("```json")[-1].split("```")[0].strip()
             
-            facts = json.loads(cleaned_json)
+            # Robust JSON extraction
+            content = raw_response.strip()
+            if "```json" in content:
+                content = content.split("```json")[-1].split("```")[0].strip()
+            elif "```" in content:
+                content = content.split("```")[-1].split("```")[0].strip()
+            
+            # Find the actual start and end of the JSON array
+            start = content.find("[")
+            end = content.rfind("]")
+            if start != -1 and end != -1:
+                content = content[start:end+1]
+            
+            facts = json.loads(content)
             for fact in facts:
                 if fact.get('is_memorable') and fact.get('confidence', 0) > 0.6:
                     await self.save_fact(user_id, fact)
