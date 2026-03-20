@@ -6,26 +6,31 @@ class EmbeddingEngine:
     def __init__(self):
         self.api_key = os.getenv("HF_TOKEN")
         self.model_id = "sentence-transformers/all-MiniLM-L6-v2"
-        # Standard Inference API endpoint
-        self.api_url = f"https://api-inference.huggingface.co/models/{self.model_id}"
+        # Using the new OpenAI-compatible stable endpoint
+        self.api_url = "https://api-inference.huggingface.co/v1/embeddings"
         
         if not self.api_key:
             print("WARNING: HF_TOKEN not found in environment. Embeddings will be offline.")
 
     def embed_text(self, text):
         """
-        Converts text into a vector embedding using Hugging Face Inference API.
+        Converts text into a vector embedding using HF OpenAI-compatible API.
         Dimensions: 384
         """
         if not self.api_key:
             return [0.0] * 384
             
         headers = {"Authorization": f"Bearer {self.api_key}"}
+        payload = {
+            "model": self.model_id,
+            "input": [text]
+        }
         try:
             with httpx.Client(timeout=10.0) as client:
-                response = client.post(self.api_url, headers=headers, json={"inputs": [text]})
+                response = client.post(self.api_url, headers=headers, json=payload)
                 if response.status_code == 200:
-                    return response.json()[0]
+                    data = response.json()
+                    return data['data'][0]['embedding']
                 else:
                     print(f"ERROR: HuggingFace API {response.status_code}: {response.text}")
                     return [0.0] * 384

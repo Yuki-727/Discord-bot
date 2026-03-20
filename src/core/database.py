@@ -111,4 +111,12 @@ class Database:
             logs = cursor.fetchall()
             return logs[::-1]
 
+    def clear_history(self, channel_id):
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM chat_logs WHERE channel_id = ?", (channel_id,))
+            cursor.execute("DELETE FROM summary_memory WHERE channel_id = ?", (channel_id,))
+            cursor.execute("DELETE FROM character_state")
+            conn.commit()
+
 db = Database()

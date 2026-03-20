@@ -148,5 +148,18 @@ class ChatCog(commands.Cog):
         db.add_monitored_channel(str(ctx.channel.id))
         await ctx.send("I can read the messages here now! (Passive reading enabled)")
 
+    @commands.command(name="reset")
+    @commands.has_permissions(administrator=True)
+    async def reset_prefix(self, ctx):
+        from ..core.database import db
+        db.clear_history(str(ctx.channel.id))
+        await ctx.send("Memory cleared for this channel! (Character state reset globally)")
+
+    @discord.app_commands.command(name="reset", description="Reset Nia's memory for this channel.")
+    async def reset_slash(self, interaction: discord.Interaction):
+        from ..core.database import db
+        db.clear_history(str(interaction.channel_id))
+        await interaction.response.send_message("Memory cleared for this channel!", ephemeral=True)
+
 async def setup(bot):
     await bot.add_cog(ChatCog(bot))
