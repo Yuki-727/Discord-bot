@@ -161,11 +161,22 @@ class ChatCog(commands.Cog):
         db.clear_history(str(interaction.channel_id))
         await interaction.response.send_message("Memory cleared for this channel!", ephemeral=True)
 
-    @commands.command(name="sync")
+    @commands.command(name="listmodels")
     @commands.has_permissions(administrator=True)
-    async def sync_commands(self, ctx):
-        await self.bot.tree.sync()
-        await ctx.send("Slash commands synced successfully! Try `/reset` now.")
+    async def list_models(self, ctx):
+        api_key = os.getenv("GEMINI_API_KEY") or os.getenv("AI_API_KEY")
+        url = f"https://generativelanguage.googleapis.com/v1beta/models?key={api_key}"
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.get(url)
+                if response.status_code == 200:
+                    models = response.json().get("models", [])
+                    embed_models = [m['name'] for m in models if "embedContent" in m.get("supportedGenerationMethods", [])]
+                    await ctx.send(f"Available Embedding Models: {', '.join(embed_models) or 'None'}")
+                else:
+                    await ctx.send(f"Error {response.status_code}: {response.text[:200]}")
+        except Exception as e:
+            await ctx.send(f"Exception: {str(e)}")
 
 async def setup(bot):
     await bot.add_cog(ChatCog(bot))
