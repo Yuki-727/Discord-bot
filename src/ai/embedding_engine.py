@@ -4,59 +4,45 @@ import time
 
 class EmbeddingEngine:
     def __init__(self):
-        self.api_key = os.getenv("HF_TOKEN")
-        self.model_id = "sentence-transformers/all-MiniLM-L6-v2"
-        # Using the router domain as strictly requested by HF
-        self.api_url = "https://router.huggingface.co/v1/embeddings"
+        # Prefer GEMINI_API_KEY, fallback to AI_API_KEY
+        self.api_key = os.getenv("GEMINI_API_KEY") or os.getenv("AI_API_KEY")
+        self.model_id = "models/embedding-001"
+        self.api_url = f"https://generativelanguage.googleapis.com/v1beta/{self.model_id}:embedContent"
         
         if not self.api_key:
-            print("WARNING: HF_TOKEN not found in environment. Embeddings will be offline.")
+            print("WARNING: Gemini API Key not found. Embeddings will be offline.")
 
     def embed_text(self, text):
         """
-        Converts text into a vector embedding using HF OpenAI-compatible API.
-        Dimensions: 384
+        Converts text into a vector embedding using Google Gemini API.
+        Dimensions: 768
         """
         if not self.api_key:
-            return [0.0] * 384
+            return [0.0] * 768
             
-        headers = {"Authorization": f"Bearer {self.api_key}"}
+        params = {"key": self.api_key}
         payload = {
             "model": self.model_id,
-            "input": [text]
+            "content": {"parts": [{"text": text}]}
         }
         try:
             with httpx.Client(timeout=10.0) as client:
-                response = client.post(self.api_url, headers=headers, json=payload)
+                response = client.post(self.api_url, params=params, json=payload)
                 if response.status_code == 200:
                     data = response.json()
-                    return data['data'][0]['embedding']
+                    return data['embedding']['values']
                 else:
-                    print(f"ERROR: HuggingFace API {response.status_code}: {response.text}")
-                    return [0.0] * 384
+                    print(f"ERROR: Gemini API {response.status_code}: {response.text}")
+                    return [0.0] * 768
         except Exception as e:
-            print(f"ERROR: HuggingFace Embedding failed: {e}")
-            return [0.0] * 384
+            print(f"ERROR: Gemini Embedding failed: {e}")
+            return [0.0] * 768
 
     def embed_batch(self, texts):
         """
-        Converts a list of texts into vector embeddings using Hugging Face Inference API.
+        Iterate for stable batching with embedContent.
         """
-        if not self.api_key:
-            return [[0.0] * 384 for _ in texts]
-            
-        headers = {"Authorization": f"Bearer {self.api_key}"}
-        try:
-            with httpx.Client(timeout=15.0) as client:
-                response = client.post(self.api_url, headers=headers, json={"inputs": texts})
-                if response.status_code == 200:
-                    return response.json()
-                else:
-                    print(f"ERROR: HuggingFace Batch API {response.status_code}: {response.text}")
-                    return [[0.0] * 384 for _ in texts]
-        except Exception as e:
-            print(f"ERROR: HuggingFace Batch failed: {e}")
-            return [[0.0] * 384 for _ in texts]
+        return [self.embed_text(t) for t in texts]
 
     @staticmethod
     def cosine_similarity(v1, v2):
