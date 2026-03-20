@@ -161,5 +161,11 @@ class ChatCog(commands.Cog):
         db.clear_history(str(interaction.channel_id))
         await interaction.response.send_message("Memory cleared for this channel!", ephemeral=True)
 
+    @commands.command(name="sync")
+    @commands.has_permissions(administrator=True)
+    async def sync_commands(self, ctx):
+        await self.bot.tree.sync()
+        await ctx.send("Slash commands synced successfully! Try `/reset` now.")
+
 async def setup(bot):
     await bot.add_cog(ChatCog(bot))

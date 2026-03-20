@@ -6,8 +6,8 @@ class EmbeddingEngine:
     def __init__(self):
         self.api_key = os.getenv("HF_TOKEN")
         self.model_id = "sentence-transformers/all-MiniLM-L6-v2"
-        # Using the new OpenAI-compatible stable endpoint
-        self.api_url = "https://api-inference.huggingface.co/v1/embeddings"
+        # Using the router domain as strictly requested by HF
+        self.api_url = "https://router.huggingface.co/v1/embeddings"
         
         if not self.api_key:
             print("WARNING: HF_TOKEN not found in environment. Embeddings will be offline.")
