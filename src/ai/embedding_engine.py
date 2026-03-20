@@ -6,7 +6,7 @@ class EmbeddingEngine:
     def __init__(self):
         # Prefer GEMINI_API_KEY, fallback to AI_API_KEY
         self.api_key = os.getenv("GEMINI_API_KEY") or os.getenv("AI_API_KEY")
-        self.model_id = "models/embedding-001"
+        self.model_id = "models/text-embedding-004"
         self.api_url = f"https://generativelanguage.googleapis.com/v1beta/{self.model_id}:embedContent"
         
         if not self.api_key:
