@@ -1,6 +1,8 @@
 import asyncio
 import random
 import re
+import os
+import httpx
 import discord
 from discord.ext import commands
 from ..core.pipeline import pipeline
