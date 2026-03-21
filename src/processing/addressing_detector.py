@@ -64,10 +64,24 @@ Return JSON: {{"role": "TARGET"|"TOPIC"|"CONTINUITY"|"NONE", "confidence": float
 """
         try:
             raw = await ai_client.generate_response([{"role": "user", "content": prompt}])
-            data = json.loads(raw.strip().strip("```json").strip("```"))
+            content = raw.strip()
+            if "```json" in content:
+                content = content.split("```json")[-1].split("```")[0].strip()
+            elif "```" in content:
+                content = content.split("```")[-1].split("```")[0].strip()
+            
+            # Find the actual start and end
+            start = content.find("{")
+            end = content.rfind("}")
+            if start != -1 and end != -1:
+                content = content[start:end+1]
+                
+            data = json.loads(content)
             ai_role = data.get('role', 'NONE')
             ai_conf = data.get('confidence', 0.0)
-        except: pass
+        except Exception as e:
+            ai_role = "ERROR"
+            print(f"DEBUG: Addressing AI Error: {e}")
 
         aw = 0.0
         if ai_role == "TARGET": aw = ai_conf
@@ -84,8 +98,12 @@ Return JSON: {{"role": "TARGET"|"TOPIC"|"CONTINUITY"|"NONE", "confidence": float
             prev_vector = embedding_engine.embed_text(prev_text)
             ts = embedding_engine.cosine_similarity(topic_vector, prev_vector)
         
+        # AC: Addressing Carry
         ac = 1.0 if (ai_role == "CONTINUITY" or is_1on1) else ts
-        cs = (ts * 0.5) + (ac * 0.5)
+        # TP: Time Proximity (Assume Nia spoke last)
+        tp = 1.0 if (recent_messages and recent_messages[-1][1].lower() == "nia") else 0.5
+        
+        cs = (ts * 0.4) + (ac * 0.3) + (tp * 0.3)
 
         # --- Part 3: KC & MM (20%) ---
         kc = 1.0; mm = 1.0
@@ -97,10 +115,17 @@ Return JSON: {{"role": "TARGET"|"TOPIC"|"CONTINUITY"|"NONE", "confidence": float
         blocked = (ai_role == "TOPIC" and ai_conf > 0.7)
         is_addressed = (not blocked) and (final_confidence >= 0.55)
 
+        # Build detailed reason
+        reason = (
+            f"[Intent={ai_role}] [Is1on1={is_1on1}] [LockState={lock.state}] "
+            f"[AW={aw:.2f}] [CS={cs:.2f}] [TS={ts:.2f}] [AC={ac:.2f}] [TP={tp:.2f}] [KC={kc:.2f}] [MM={mm:.2f}] "
+            f"[BlockedBy={'TopicDetection' if blocked else 'None'}] [Confidence={final_confidence:.2f}]"
+        )
+
         return {
             "is_addressed": is_addressed,
             "confidence": min(1.0, final_confidence),
-            "reason": f"[Intent={ai_role}] [Is1on1={is_1on1}] [LockState={lock.state}] [AW={aw:.2f}] [CS={cs:.2f}] [BlockedBy={'TopicDetection' if blocked else 'None'}] [Confidence={final_confidence:.2f}]"
+            "reason": reason
         }
 
 addressing_detector = AddressingDetector(bot_name="Nia", nicknames=["nia"])
