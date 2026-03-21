@@ -168,15 +168,16 @@ class ChatCog(commands.Cog):
 
     @discord.app_commands.command(name="read", description="Bật/Tắt chế độ Passive Read (Nia sẽ lắng nghe và tự động rep)")
     async def read_slash(self, interaction: discord.Interaction):
+        await interaction.response.defer()
         from ..core.database import db
         channel_id = str(interaction.channel_id)
         
         if db.is_channel_monitored(channel_id):
             db.remove_monitored_channel(channel_id)
-            await interaction.response.send_message(f"⏹️ Đã tắt chế độ **Passive Read** tại kênh này.")
+            await interaction.followup.send(f"⏹️ Đã tắt chế độ **Passive Read** tại kênh này.")
         else:
             db.add_monitored_channel(channel_id)
-            await interaction.response.send_message(f"📡 Đã bật chế độ **Passive Read**. Nia sẽ bắt đầu lắng nghe và trả lời tự động!")
+            await interaction.followup.send(f"📡 Đã bật chế độ **Passive Read**. Nia sẽ bắt đầu lắng nghe và trả lời tự động!")
 
     @commands.command(name="read")
     async def read_prefix(self, ctx):
@@ -192,12 +193,13 @@ class ChatCog(commands.Cog):
 
     @discord.app_commands.command(name="show_locks", description="Hiển thị các Conversation Locks hiện tại")
     async def show_locks(self, interaction: discord.Interaction):
+        await interaction.response.defer()
         from ..core.conversation_lock import lock_manager
         channel_id = str(interaction.channel_id)
         locks = lock_manager.locks.get(channel_id, [])
         
         if not locks:
-            return await interaction.response.send_message("Không có Conversation Lock nào đang hoạt động.")
+            return await interaction.followup.send("Không có Conversation Lock nào đang hoạt động.")
         
         embed = discord.Embed(title="Conversation Locks", color=discord.Color.blue())
         for i, l in enumerate(locks):
@@ -208,23 +210,22 @@ class ChatCog(commands.Cog):
                 value=f"**Participants**: {parts}\n**Last Msg**: {last_msg}",
                 inline=False
             )
-        await interaction.response.send_message(embed=embed)
+        await interaction.followup.send(embed=embed)
 
     @discord.app_commands.command(name="show_memory", description="Hiển thị các Fact gần nhất trong bộ nhớ dài hạn")
     async def show_memory(self, interaction: discord.Interaction):
+        await interaction.response.defer()
         from ..memory.semantic_memory import semantic_memory
-        channel_id = str(interaction.channel_id)
+        user_id = str(interaction.user.id)
         
-        # Search with a generic query to find recent items
-        results = semantic_memory.search("recent facts about context", limit=5, metadata_filter={"channel_id": channel_id})
+        # Use existing query_facts with a generic thought
+        facts_str = semantic_memory.query_facts(user_id, "What do you know about me?")
         
-        if not results:
-            return await interaction.response.send_message("Chưa có dữ liệu Semantic Memory cho kênh này.")
+        if "No matching memories found" in facts_str:
+            return await interaction.followup.send(f"Chưa có dữ liệu Semantic Memory cho <@{user_id}>.")
         
-        embed = discord.Embed(title="Semantic Memory (Recent Facts)", color=discord.Color.green())
-        for r in results:
-            embed.add_field(name=f"Fact (Sim: {r['similarity']:.2f})", value=r['content'], inline=False)
-        await interaction.response.send_message(embed=embed)
+        embed = discord.Embed(title=f"Semantic Memory for {interaction.user.name}", color=discord.Color.green(), description=facts_str)
+        await interaction.followup.send(embed=embed)
 
     @commands.command(name="reset")
     @commands.has_permissions(administrator=True)
@@ -235,6 +236,7 @@ class ChatCog(commands.Cog):
 
     @discord.app_commands.command(name="reset", description="Xóa sạch ký ức và các khóa hội thoại tại kênh này")
     async def reset_slash(self, interaction: discord.Interaction):
+        await interaction.response.defer()
         from ..core.database import db
         from ..core.conversation_lock import lock_manager
         channel_id = str(interaction.channel_id)
@@ -243,7 +245,7 @@ class ChatCog(commands.Cog):
         if channel_id in lock_manager.locks:
             lock_manager.locks.pop(channel_id)
             
-        await interaction.response.send_message("🧹 Đã dọn dẹp sạch ký ức và các Lock tại kênh này!")
+        await interaction.followup.send("🧹 Đã dọn dẹp sạch ký ức và các Lock tại kênh này!")
 
     @commands.command(name="listmodels")
     @commands.has_permissions(administrator=True)

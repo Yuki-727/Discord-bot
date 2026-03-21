@@ -85,6 +85,12 @@ class Database:
             cursor.execute("INSERT OR IGNORE INTO monitored_channels (channel_id) VALUES (?)", (channel_id,))
             conn.commit()
 
+    def remove_monitored_channel(self, channel_id):
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM monitored_channels WHERE channel_id = ?", (channel_id,))
+            conn.commit()
+
     def is_channel_monitored(self, channel_id):
         with self._get_connection() as conn:
             cursor = conn.cursor()
