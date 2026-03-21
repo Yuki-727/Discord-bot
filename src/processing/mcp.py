@@ -9,7 +9,7 @@ class MessageContinuationPredictor:
     """
     def __init__(self):
         self.typing_cache = {} # channel_id -> {user_id: timestamp}
-        self.WAIT_THRESHOLD = 5.0 # Seconds to wait after typing stops
+        self.WAIT_THRESHOLD = 12.0 # Discord typing heartbeat is ~10s, so 12s is safer
 
     def update_typing(self, channel_id, user_id):
         """Update the last seen typing timestamp for a user."""
@@ -30,16 +30,29 @@ class MessageContinuationPredictor:
         Uses AI to predict if a message fragment is complete or likely to be continued.
         Returns: "STOP" (Complete) or "CONTINUE" (Wait)
         """
-        # Short strings or common continuation indicators
+        # Hard check for fragments
         text_lower = text.strip().lower()
-        if len(text_lower) < 4 or text_lower.endswith("...") or text_lower.endswith(",") or text_lower.endswith("và"):
+        # Common Vietnamese continuation particles
+        particles = [
+            "thì", "là", "mà", "nhưng", "nếu", "và", "hoặc", "rồi", 
+            "còn", "nên", "cho", "vì", "với", "hơn", "như", "nào"
+        ]
+        
+        is_fragment = (
+            len(text_lower) < 4 or 
+            text_lower.endswith("...") or 
+            text_lower.endswith(",") or 
+            any(text_lower.endswith(f" {p}") or text_lower == p for p in particles)
+        )
+        
+        if is_fragment:
             return "CONTINUE"
 
         prompt = f"""Analyze if Nia should reply NOW to {username}. 
 MESSAGE: "{text}"
 
 Is this a complete thought/question? 
-- If the user is likely to send more fragments, details, or if the message is very short/vague (like "hey", "I think"), return "CONTINUE".
+- If the user is likely to send more fragments, details, or if the message is open-ended (like "hey", "I think", "tính ra thì"), return "CONTINUE".
 - ONLY if the message is a full sentence and seems like a natural stopping point, return "STOP".
 
 Return only: "STOP" or "CONTINUE".
