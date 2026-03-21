@@ -10,8 +10,8 @@ class IntentClassifier:
             "casual_chat": [r"hi", r"hello", r"chào", r"tạm biệt", r"bye"],
         }
         self.possible_intents = [
-            "casual_chat", "question", "memory_query", "command",
-            "story_request", "roleplay", "emotional_support", "system_control"
+            "incomplete_fragment", "casual_chat", "question", "memory_query", 
+            "command", "story_request", "roleplay", "emotional_support", "system_control"
         ]
 
     def _rule_detect(self, text):

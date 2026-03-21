@@ -32,6 +32,11 @@ class MessagePipeline:
         from ..processing.intent_classifier import intent_classifier
         intent_data = await intent_classifier.classify(normalized_text)
         
+        if intent_data.get('intent') == 'incomplete_fragment':
+            logger.info(f"DEBUG [Pipeline]: Intent is incomplete_fragment. Nia stays silent for further context.")
+            memory_manager.update_message_log(channel_id, user_id, username, normalized_text, "[Waiting for context]")
+            return None
+
         if not is_addressed:
             # Passive Read Mode: Log to memory but don't reply
             memory_manager.update_memory(channel_id, user_id, username, normalized_text, "[Overheard]")

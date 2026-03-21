@@ -32,17 +32,20 @@ class MessageContinuationPredictor:
         """
         # Hard check for fragments
         text_lower = text.strip().lower()
-        # Common Vietnamese continuation particles
+        # Common Vietnamese & English callouts/fragments
         particles = [
             "thì", "là", "mà", "nhưng", "nếu", "và", "hoặc", "rồi", 
-            "còn", "nên", "cho", "vì", "với", "hơn", "như", "nào"
+            "còn", "nên", "cho", "vì", "với", "hơn", "như", "nào",
+            "bro", "hey", "yo", "nia", "ơi", "hả", "đấy", "thế", "này"
         ]
         
+        # If it's just a callout or starts with one, it's probably continued
         is_fragment = (
             len(text_lower) < 4 or 
             text_lower.endswith("...") or 
             text_lower.endswith(",") or 
-            any(text_lower.endswith(f" {p}") or text_lower == p for p in particles)
+            any(text_lower.strip() == p for p in particles) or
+            any(text_lower.endswith(f" {p}") for p in particles)
         )
         
         if is_fragment:
