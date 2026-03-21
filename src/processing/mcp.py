@@ -35,11 +35,15 @@ class MessageContinuationPredictor:
         if len(text_lower) < 4 or text_lower.endswith("...") or text_lower.endswith(",") or text_lower.endswith("và"):
             return "CONTINUE"
 
-        prompt = f"""Analyze this message from {username}. Is it a complete thought, or does it look like they will send more fragments?
+        prompt = f"""Analyze if Nia should reply NOW to {username}. 
 MESSAGE: "{text}"
 
-Return only "STOP" if it is complete and Nia should reply, or "CONTINUE" if it is incomplete/vague and Nia should wait.
-Status:"""
+Is this a complete thought/question? 
+- If the user is likely to send more fragments, details, or if the message is very short/vague (like "hey", "I think"), return "CONTINUE".
+- ONLY if the message is a full sentence and seems like a natural stopping point, return "STOP".
+
+Return only: "STOP" or "CONTINUE".
+"""
         try:
             raw = await ai_client.generate_response([{"role": "user", "content": prompt}])
             result = raw.strip().upper()

@@ -57,12 +57,12 @@ class ChatCog(commands.Cog):
         try:
             # Wait for user to stop typing and for message completion
             wait_count = 0
-            while wait_count < 10: # Max 10s additional wait
+            while wait_count < 30: # Max 30s wait to prevent infinite loops
                 await asyncio.sleep(1.0)
                 
-                # Check typing status
+                # If user is still actively typing, reset wait_count or just don't count it as a "check"
                 if mcp.is_user_typing(channel_id, user_id):
-                    wait_count += 1
+                    # We stay in the loop but don't count this as a "try" for completeness
                     continue
                 
                 # Check AI completeness
