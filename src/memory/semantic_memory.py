@@ -16,9 +16,9 @@ class SemanticMemory:
                 name="user_facts",
                 metadata={"hnsw:space": "cosine"}
             )
-            # Force a real check by querying with a 768-dim vector (Gemini)
-            # This will raise InvalidArgumentError if the collection is 384-dim or 512-dim
-            self.collection.query(query_embeddings=[[0.0]*768], n_results=1)
+            # Force a real check by querying with a 3072-dim vector (Gemini)
+            # This will raise InvalidArgumentError if the collection is 768-dim, 384-dim or 512-dim
+            self.collection.query(query_embeddings=[[0.0]*3072], n_results=1)
         except Exception as e:
             error_msg = str(e).lower()
             if "dimension" in error_msg or "invalid" in error_msg or "expecting" in error_msg:

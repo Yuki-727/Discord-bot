@@ -15,10 +15,10 @@ class EmbeddingEngine:
     def embed_text(self, text):
         """
         Converts text into a vector embedding using Google Gemini API.
-        Dimensions: 768
+        Dimensions: 3072
         """
         if not self.api_key:
-            return [0.0] * 768
+            return [0.0] * 3072
             
         params = {"key": self.api_key}
         payload = {
@@ -33,10 +33,10 @@ class EmbeddingEngine:
                     return data['embedding']['values']
                 else:
                     print(f"ERROR: Gemini API {response.status_code}: {response.text}")
-                    return [0.0] * 768
+                    return [0.0] * 3072
         except Exception as e:
             print(f"ERROR: Gemini Embedding failed: {e}")
-            return [0.0] * 768
+            return [0.0] * 3072
 
     def embed_batch(self, texts):
         """
