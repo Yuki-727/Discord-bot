@@ -11,105 +11,96 @@ class AddressingDetector:
 
     async def check_addressing(self, text, username, recent_context, bot_id):
         """
-        Calculates confidence using the new weighted formula (Phase 16).
-        recent_context: { short_term: [...], summary: {...}, semantic: "..." }
+        V3.5: Subject vs Topic Analysis with Conversation Locks.
         """
         from ..ai.embedding_engine import embedding_engine
+        from ..core.conversation_lock import lock_manager
         import time
 
         text_lower = text.lower()
+        channel_id = str(recent_context.get('channel_id', 'unknown'))
+        user_id = str(recent_context.get('user_id', 'unknown'))
         recent_messages = recent_context.get('short_term', [])
+
+        # --- Direct Command Bypass (Confidence = 1.0) ---
+        is_tagged = str(bot_id) in text or f"<@{bot_id}>" in text
+        is_prefix = text.startswith("!") or text.startswith("/")
+        if is_tagged or is_prefix:
+            return {
+                "is_addressed": True,
+                "confidence": 1.0,
+                "reason": f"[Intent=Direct] [Target=Nia] [Confidence=1.0]"
+            }
+
+        # Get or Update Thread Lock
+        topic_vector = embedding_engine.embed_text(text)
+        lock = lock_manager.get_active_lock(channel_id, user_id, topic_vector)
+        if not lock:
+            lock = lock_manager.create_lock(channel_id, user_id, topic_vector)
         
-        # --- Part 1: AW (Addressing Weight - 50%) ---
-        # Rule-based detection
-        rule_conf = 0.0
-        is_tagged = str(bot_id) in text or f"<@!{bot_id}>" in text or f"<@{bot_id}>" in text
+        lock.add_message(text, user_id)
+        
+        # --- Part 1: AW (Addressing Weight - 60%) ---
         has_name = self.bot_name in text_lower or any(n in text_lower for n in self.nicknames)
         
-        # Check last 3 for "carry"
-        nia_active_recently = any(
-            (self.bot_name in msg[2].lower() or msg[1].lower() == "nia")
-            for msg in recent_messages[-3:]
-        )
-
-        has_pronoun = any(re.search(rf"\b{p}\b", text_lower) for p in self.pronouns)
-        
-        if is_tagged: 
-            rule_conf = 0.95
-        elif has_name: 
-            rule_conf = 0.55
-        elif has_pronoun and nia_active_recently:
-            rule_conf = 0.45 # Moderate confidence if following up with a pronoun
-
+        # AI Analysis: Target vs Topic vs Continuity
+        ai_role = "UNKNOWN"
         ai_conf = 0.0
-        is_addressing_bot_ai = False
-        # Trigger AI if some rules met or Nia active
-        if rule_conf > 0.1 or nia_active_recently:
-            context_str = "\n".join([f"{m[1]}: {m[2]}" for m in recent_messages[-5:]])
-            prompt = f"""Is the latest message from {username} directed at Nia?
+        
+        context_str = "\n".join([f"{m[1]}: {m[2]}" for m in recent_messages[-5:]])
+        prompt = f"""Is Nia the intended RECIPIENT of this message?
 CONTEXT:
 {context_str}
 
-LATEST MESSAGE:
-{username}: "{text}"
+LATEST MESSAGE from {username}: "{text}"
 
-Guidelines:
-- Directed at Nia? is_addressing_bot = true.
-- Talking about Nia to someone else? is_addressing_bot = false.
-Return JSON: {{"is_addressing_bot": bool, "confidence": float}}
+Roles:
+- "TARGET": Speaking directly TO Nia.
+- "TOPIC": Talking ABOUT Nia to someone else.
+- "CONTINUITY": Following up on a conversation Nia is already in.
+- "NONE": Not related to Nia.
+
+Return JSON: {{"role": "TARGET"|"TOPIC"|"CONTINUITY"|"NONE", "confidence": float}}
 """
-            try:
-                raw = await ai_client.generate_response([{"role": "user", "content": prompt}])
-                data = json.loads(raw.strip().strip("```json").strip("```"))
-                ai_conf = data.get('confidence', 0.0)
-                is_addressing_bot_ai = data.get('is_addressing_bot', False)
-            except: pass
+        try:
+            raw = await ai_client.generate_response([{"role": "user", "content": prompt}])
+            data = json.loads(raw.strip().strip("```json").strip("```"))
+            ai_role = data.get('role', 'NONE')
+            ai_conf = data.get('confidence', 0.0)
+        except: pass
 
-        aw = (rule_conf + ai_conf) / 2 if ai_conf > 0 else rule_conf
+        aw = 0.0
+        if ai_role == "TARGET": aw = ai_conf
+        elif ai_role == "CONTINUITY": aw = ai_conf * 0.8
+        elif ai_role == "TOPIC": aw = 0.1 # Very low, Nia is just a topic
 
-        # --- Part 2: CS (Context Strength - 15%) ---
-        # CS = (0.55 * TS) + (0.25 * TP) + (0.2 * AC)
+        # --- Part 2: CS (Context Strength - 20%) ---
+        # 1-1 Bonus logic
+        is_1on1 = len(lock.participants) <= 2 # Nia + User
         
-        # TS: Topic Similarity
         ts = 0.0
-        curr_vector = embedding_engine.embed_text(text)
         prev_text = recent_messages[-1][2] if recent_messages else ""
-        if not prev_text and recent_context.get('summary'):
-            prev_text = recent_context['summary'].get('content', "")
-        
         if prev_text:
             prev_vector = embedding_engine.embed_text(prev_text)
-            ts = embedding_engine.cosine_similarity(curr_vector, prev_vector)
+            ts = embedding_engine.cosine_similarity(topic_vector, prev_vector)
         
-        # TP: Time Proximity (Decay over 60 seconds)
-        tp = 0.0
-        # For simplicity, we assume messages are incoming fast. 
-        # In a real scenario, we'd check timestamps from DB. 
-        # Since we don't have absolute wall-clock easily, we'll assume 1.0 if Nia spoke last.
-        if recent_messages and recent_messages[-1][1].lower() == "nia":
-            tp = 1.0
-            
-        # AC: Addressing Carry
-        ac = 1.0 if nia_active_recently else 0.0
-        
-        cs = (0.55 * ts) + (0.25 * tp) + (0.2 * ac)
+        ac = 1.0 if (ai_role == "CONTINUITY" or is_1on1) else ts
+        cs = (ts * 0.5) + (ac * 0.5)
 
         # --- Part 3: KC & MM (20%) ---
-        kc = 1.0 # Knowledge Confidence
-        mm = 1.0 # Mood Modifier
+        kc = 1.0; mm = 1.0
 
-        # --- Final Formula (Stricter weights - Phase 16.5) ---
-        # aw (60%) + cs (20%) + kc (10%) + mm (10%)
+        # FINAL FORMULA
         final_confidence = (aw * 0.60) + (cs * 0.20) + (kc * 0.10) + (mm * 0.10)
         
-        # Decide (Threshold lowered to 0.55 as requested)
-        # Strict: must have some AW or very high CS
-        is_addressed = (aw > 0.4 and is_addressing_bot_ai) or (final_confidence >= 0.55)
+        # Blocking Logic for Topic only
+        blocked = (ai_role == "TOPIC" and ai_conf > 0.7)
+        is_addressed = (not blocked) and (final_confidence >= 0.55)
 
         return {
             "is_addressed": is_addressed,
             "confidence": min(1.0, final_confidence),
-            "reason": f"AW={aw:.2f}, CS={cs:.2f} (TS={ts:.2f})"
+            "reason": f"[Intent={ai_role}] [Is1on1={is_1on1}] [LockState={lock.state}] [AW={aw:.2f}] [CS={cs:.2f}] [BlockedBy={'TopicDetection' if blocked else 'None'}] [Confidence={final_confidence:.2f}]"
         }
 
 addressing_detector = AddressingDetector(bot_name="Nia", nicknames=["nia"])

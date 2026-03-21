@@ -14,6 +14,12 @@ class ChatCog(commands.Cog):
         self.buffer_tasks = {} # (channel_id, user_id) -> asyncio.Task
 
     @commands.Cog.listener()
+    async def on_typing(self, channel, user, when):
+        if user.bot: return
+        from ..processing.mcp import mcp
+        mcp.update_typing(str(channel.id), str(user.id))
+
+    @commands.Cog.listener()
     async def on_message(self, message):
         if message.author.bot:
             return
@@ -22,15 +28,16 @@ class ChatCog(commands.Cog):
         channel_id = str(message.channel.id)
         user_id = str(message.author.id)
         
-        # We only buffer for monitored channels or DMs
+        # We only buffer for monitored channels, DMs, or direct Tag/Command
         is_monitored = db.is_channel_monitored(channel_id)
         is_dm = isinstance(message.channel, discord.DMChannel)
+        is_tag = self.bot.user.mentioned_in(message)
         is_command = message.content.startswith(self.bot.command_prefix)
 
-        if not (is_monitored or is_dm or is_command):
+        if not (is_monitored or is_dm or is_command or is_tag):
             return
 
-        # Buffering logic (5s wait)
+        # Buffering logic
         key = (channel_id, user_id)
         if key not in self.msg_buffers:
             self.msg_buffers[key] = []
@@ -44,8 +51,30 @@ class ChatCog(commands.Cog):
         self.buffer_tasks[key] = asyncio.create_task(self._process_buffer_task(message, key))
 
     async def _process_buffer_task(self, original_message, key):
+        from ..processing.mcp import mcp
+        channel_id, user_id = key
+        
         try:
-            await asyncio.sleep(1.0) # Reduced from 5.0
+            # Wait for user to stop typing and for message completion
+            wait_count = 0
+            while wait_count < 10: # Max 10s additional wait
+                await asyncio.sleep(1.0)
+                
+                # Check typing status
+                if mcp.is_user_typing(channel_id, user_id):
+                    wait_count += 1
+                    continue
+                
+                # Check AI completeness
+                combined_text = "\n".join(self.msg_buffers.get(key, []))
+                if not combined_text: break
+                
+                status = await mcp.check_completeness(combined_text, original_message.author.name)
+                if status == "STOP":
+                    break
+                else:
+                    wait_count += 1
+
             messages = self.msg_buffers.pop(key, [])
             if not messages: return
             
