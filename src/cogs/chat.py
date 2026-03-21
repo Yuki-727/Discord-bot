@@ -28,21 +28,31 @@ class ChatCog(commands.Cog):
         channel_id = str(message.channel.id)
         user_id = str(message.author.id)
         
-        # We only buffer for monitored channels, DMs, or direct Tag/Command
+        # Filtering logic for commands
+        is_command = message.content.startswith(self.bot.command_prefix)
+        is_chat_command = message.content.startswith(f"{self.bot.command_prefix}chat ")
+        
+        # If it's a command but NOT !chat, we ignore it entirely (don't even passive read it)
+        if is_command and not is_chat_command:
+            return
+
         is_monitored = db.is_channel_monitored(channel_id)
         is_dm = isinstance(message.channel, discord.DMChannel)
         is_tag = self.bot.user.mentioned_in(message)
-        is_command = message.content.startswith(self.bot.command_prefix)
 
-        if not (is_monitored or is_dm or is_command or is_tag):
+        if not (is_monitored or is_dm or is_tag or is_chat_command):
             return
 
         # Buffering logic
+        content = message.content
+        if is_chat_command:
+            content = content[len(self.bot.command_prefix) + 5:].strip() # Strip "!chat "
+
         key = (channel_id, user_id)
         if key not in self.msg_buffers:
             self.msg_buffers[key] = []
         
-        self.msg_buffers[key].append(message.content)
+        self.msg_buffers[key].append(content)
 
         # Reset/Start timer
         if key in self.buffer_tasks:
