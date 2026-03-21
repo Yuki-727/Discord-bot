@@ -53,6 +53,7 @@ class ChatCog(commands.Cog):
             self.msg_buffers[key] = []
         
         self.msg_buffers[key].append(content)
+        print(f"DEBUG [Queue]: Added message from {message.author.name} to buffer. Count: {len(self.msg_buffers[key])}")
 
         # Reset/Start timer
         if key in self.buffer_tasks:
@@ -81,6 +82,7 @@ class ChatCog(commands.Cog):
                 
                 status = await mcp.check_completeness(combined_text, original_message.author.name)
                 if status == "STOP":
+                    print(f"DEBUG [Queue]: MCP returned STOP for {original_message.author.name}. Merging buffer.")
                     break
                 else:
                     wait_count += 1
@@ -89,11 +91,29 @@ class ChatCog(commands.Cog):
             if not messages: return
             
             combined_text = "\n".join(messages)
+            print(f"DEBUG [Queue]: Processed merged message ({len(messages)} chunks) from {original_message.author.name}")
             await self._process_merged_message(original_message, combined_text)
         except asyncio.CancelledError:
             pass
         finally:
             self.buffer_tasks.pop(key, None)
+
+    @discord.app_commands.command(name="show_queue", description="Hiển thị hàng chờ tin nhắn hiện tại (Buffering)")
+    async def show_queue(self, interaction: discord.Interaction):
+        await interaction.response.defer()
+        if not self.msg_buffers:
+            return await interaction.followup.send("Hàng chờ tin nhắn hiện đang trống.")
+        
+        embed = discord.Embed(title="Message Buffers", color=discord.Color.orange())
+        for (cid, uid), msgs in self.msg_buffers.items():
+            user = self.bot.get_user(int(uid))
+            name = user.name if user else uid
+            embed.add_field(
+                name=f"User: {name} (Channel: {cid})",
+                value=f"**Count**: {len(msgs)}\n**Content**: {' | '.join(msgs)[:100]}...",
+                inline=False
+            )
+        await interaction.followup.send(embed=embed)
 
     async def _process_merged_message(self, message, combined_text):
         from ..core.cooldown import cooldown_manager
@@ -241,8 +261,12 @@ class ChatCog(commands.Cog):
     @commands.has_permissions(administrator=True)
     async def reset_prefix(self, ctx):
         from ..core.database import db
-        db.clear_history(str(ctx.channel.id))
-        await ctx.send("Memory cleared for this channel! (Character state reset globally)")
+        from ..core.conversation_lock import lock_manager
+        channel_id = str(ctx.channel.id)
+        db.clear_history(channel_id)
+        if channel_id in lock_manager.locks:
+            lock_manager.locks.pop(channel_id)
+        await ctx.send("🧹 Memory and Locks cleared for this channel!")
 
     @discord.app_commands.command(name="reset", description="Xóa sạch ký ức và các khóa hội thoại tại kênh này")
     async def reset_slash(self, interaction: discord.Interaction):
@@ -256,6 +280,17 @@ class ChatCog(commands.Cog):
             lock_manager.locks.pop(channel_id)
             
         await interaction.followup.send("🧹 Đã dọn dẹp sạch ký ức và các Lock tại kênh này!")
+
+    @commands.command(name="sync")
+    @commands.has_permissions(administrator=True)
+    async def sync_commands(self, ctx):
+        """Force sync slash commands with Discord."""
+        await ctx.send("⏳ Đang đồng bộ Slash Commands...")
+        try:
+            synced = await self.bot.tree.sync()
+            await ctx.send(f"✅ Đã đồng bộ {len(synced)} lệnh!")
+        except Exception as e:
+            await ctx.send(f"❌ Lỗi đồng bộ: {e}")
 
     @commands.command(name="listmodels")
     @commands.has_permissions(administrator=True)

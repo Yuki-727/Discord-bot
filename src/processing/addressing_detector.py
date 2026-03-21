@@ -123,10 +123,4 @@ Return JSON: {{"role": "TARGET"|"TOPIC"|"CONTINUITY"|"NONE", "confidence": float
             "reason": reason
         }
 
-        return {
-            "is_addressed": is_addressed,
-            "confidence": min(1.0, final_confidence),
-            "reason": reason
-        }
-
 addressing_detector = AddressingDetector(bot_name="Nia", nicknames=["nia"])

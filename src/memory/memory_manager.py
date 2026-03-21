@@ -21,7 +21,9 @@ class MemoryManager:
         return {
             "short_term": short_term,
             "summary": summary_data,
-            "semantic": semantic
+            "semantic": semantic,
+            "user_id": user_id,
+            "channel_id": channel_id
         }
 
     def get_persistent_summary(self, channel_id):
