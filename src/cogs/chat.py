@@ -273,13 +273,18 @@ class ChatCog(commands.Cog):
         await interaction.response.defer()
         from ..core.database import db
         from ..core.conversation_lock import lock_manager
+        from ..memory.semantic_memory import semantic_memory
+        
         channel_id = str(interaction.channel_id)
+        user_id = str(interaction.user.id)
         
         db.clear_history(channel_id)
+        semantic_memory.delete_user_memory(user_id)
+        
         if channel_id in lock_manager.locks:
             lock_manager.locks.pop(channel_id)
             
-        await interaction.followup.send("🧹 Đã dọn dẹp sạch ký ức và các Lock tại kênh này!")
+        await interaction.followup.send("🧹 Đã dọn dẹp sạch KÝ ỨC (Ngắn hạn & Dài hạn) và các Lock tại kênh này!")
 
     @commands.command(name="sync")
     @commands.has_permissions(administrator=True)

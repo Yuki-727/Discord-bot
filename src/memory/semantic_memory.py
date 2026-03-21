@@ -138,6 +138,13 @@ Return ONLY a JSON array:
                 metadatas=[metadata]
             )
 
+    def delete_user_memory(self, user_id):
+        """
+        Deletes all semantic memories for a specific user.
+        """
+        self.collection.delete(where={"user_id": user_id})
+        print(f"DEBUG: Deleted all semantic memories for user {user_id}")
+
     def query_facts(self, user_id, query_text):
         """
         Retrieve facts with Ranking & Filtering.
