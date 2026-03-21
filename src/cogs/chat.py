@@ -166,18 +166,65 @@ class ChatCog(commands.Cog):
         else:
             await interaction.followup.send("*(Nia overhears this but stays silent)*", ephemeral=True)
 
-    @discord.app_commands.command(name="read", description="Enable passive reading in this channel.")
+    @discord.app_commands.command(name="read", description="Bật/Tắt chế độ Passive Read (Nia sẽ lắng nghe và tự động rep)")
     async def read_slash(self, interaction: discord.Interaction):
         from ..core.database import db
-        db.add_monitored_channel(str(interaction.channel_id))
-        await interaction.response.send_message("I can read the messages here now! (Passive reading enabled)", ephemeral=True)
+        channel_id = str(interaction.channel_id)
+        
+        if db.is_channel_monitored(channel_id):
+            db.remove_monitored_channel(channel_id)
+            await interaction.response.send_message(f"⏹️ Đã tắt chế độ **Passive Read** tại kênh này.")
+        else:
+            db.add_monitored_channel(channel_id)
+            await interaction.response.send_message(f"📡 Đã bật chế độ **Passive Read**. Nia sẽ bắt đầu lắng nghe và trả lời tự động!")
 
     @commands.command(name="read")
-    @commands.has_permissions(administrator=True)
     async def read_prefix(self, ctx):
         from ..core.database import db
-        db.add_monitored_channel(str(ctx.channel.id))
-        await ctx.send("I can read the messages here now! (Passive reading enabled)")
+        channel_id = str(ctx.channel.id)
+        
+        if db.is_channel_monitored(channel_id):
+            db.remove_monitored_channel(channel_id)
+            await ctx.send(f"⏹️ Đã tắt chế độ **Passive Read**.")
+        else:
+            db.add_monitored_channel(channel_id)
+            await ctx.send(f"📡 Đã bật chế độ **Passive Read**.")
+
+    @discord.app_commands.command(name="show_locks", description="Hiển thị các Conversation Locks hiện tại")
+    async def show_locks(self, interaction: discord.Interaction):
+        from ..core.conversation_lock import lock_manager
+        channel_id = str(interaction.channel_id)
+        locks = lock_manager.locks.get(channel_id, [])
+        
+        if not locks:
+            return await interaction.response.send_message("Không có Conversation Lock nào đang hoạt động.")
+        
+        embed = discord.Embed(title="Conversation Locks", color=discord.Color.blue())
+        for i, l in enumerate(locks):
+            parts = ", ".join([f"<@{pid}>" for pid in l.participants])
+            last_msg = l.messages[-1]['text'][:50] + "..." if l.messages else "None"
+            embed.add_field(
+                name=f"Lock #{i+1} [{l.state}]",
+                value=f"**Participants**: {parts}\n**Last Msg**: {last_msg}",
+                inline=False
+            )
+        await interaction.response.send_message(embed=embed)
+
+    @discord.app_commands.command(name="show_memory", description="Hiển thị các Fact gần nhất trong bộ nhớ dài hạn")
+    async def show_memory(self, interaction: discord.Interaction):
+        from ..memory.semantic_memory import semantic_memory
+        channel_id = str(interaction.channel_id)
+        
+        # Search with a generic query to find recent items
+        results = semantic_memory.search("recent facts about context", limit=5, metadata_filter={"channel_id": channel_id})
+        
+        if not results:
+            return await interaction.response.send_message("Chưa có dữ liệu Semantic Memory cho kênh này.")
+        
+        embed = discord.Embed(title="Semantic Memory (Recent Facts)", color=discord.Color.green())
+        for r in results:
+            embed.add_field(name=f"Fact (Sim: {r['similarity']:.2f})", value=r['content'], inline=False)
+        await interaction.response.send_message(embed=embed)
 
     @commands.command(name="reset")
     @commands.has_permissions(administrator=True)
@@ -186,11 +233,17 @@ class ChatCog(commands.Cog):
         db.clear_history(str(ctx.channel.id))
         await ctx.send("Memory cleared for this channel! (Character state reset globally)")
 
-    @discord.app_commands.command(name="reset", description="Reset Nia's memory for this channel.")
+    @discord.app_commands.command(name="reset", description="Xóa sạch ký ức và các khóa hội thoại tại kênh này")
     async def reset_slash(self, interaction: discord.Interaction):
         from ..core.database import db
-        db.clear_history(str(interaction.channel_id))
-        await interaction.response.send_message("Memory cleared for this channel!", ephemeral=True)
+        from ..core.conversation_lock import lock_manager
+        channel_id = str(interaction.channel_id)
+        
+        db.clear_history(channel_id)
+        if channel_id in lock_manager.locks:
+            lock_manager.locks.pop(channel_id)
+            
+        await interaction.response.send_message("🧹 Đã dọn dẹp sạch ký ức và các Lock tại kênh này!")
 
     @commands.command(name="listmodels")
     @commands.has_permissions(administrator=True)
