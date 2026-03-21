@@ -17,7 +17,6 @@ class SemanticMemory:
                 metadata={"hnsw:space": "cosine"}
             )
             # Force a real check by querying with a 3072-dim vector (Gemini)
-            # This will raise InvalidArgumentError if the collection is 768-dim, 384-dim or 512-dim
             self.collection.query(query_embeddings=[[0.0]*3072], n_results=1)
         except Exception as e:
             error_msg = str(e).lower()
@@ -32,25 +31,33 @@ class SemanticMemory:
                     metadata={"hnsw:space": "cosine"}
                 )
             else:
-                # If it's a different error (like a timeout), we just log it
                 print(f"WARNING: Initial collection check failed: {e}")
 
     async def extract_facts(self, user_id, username, message_text, response_text):
         """
-        AI analyzes the interaction (70% weight on User Message, 30% on Bot Response).
-        Extracts facts in a unified JSON format.
+        AI generates natural internal 'memos' about the user instead of robotic facts.
         """
-        prompt = f"""Analyze this interaction. 
-Weight: 70% on User's Message ("{message_text}"), 30% on AI's Response ("{response_text}").
+        prompt = f"""As Nia, write 1-3 brief, internal 'memos' about {username} based on this chat.
+LATEST CHAT:
+{username}: "{message_text}"
+Nia: "{response_text}"
 
-Goal: Identify 'memorable' facts about the user. Ignore common/obvious info.
-Categories: identity, preferences, relationship, goals, fact, constraints.
+Focus on:
+- Personality traits or vibes.
+- Specific things they like/dislike.
+- Your relationship progress.
+- Important goals they mentioned.
 
-Return ONLY a JSON array of objects:
+Guidelines:
+- Write in natural, concise language (e.g., 'Likes talking about AI', 'Seems a bit tired today').
+- Don't state the obvious (e.g., 'The user is chatting').
+- Use categories: identity, preference, relationship, goal, fact.
+
+Return ONLY a JSON array:
 [
   {{
-    "type": "category_name",
-    "value": "concise fact",
+    "type": "category",
+    "value": "your natural memo",
     "confidence": 0.0-1.0,
     "importance": 1-5,
     "is_memorable": true
@@ -67,7 +74,6 @@ Return ONLY a JSON array of objects:
             elif "```" in content:
                 content = content.split("```")[-1].split("```")[0].strip()
             
-            # Find the actual start and end of the JSON array
             start = content.find("[")
             end = content.rfind("]")
             if start != -1 and end != -1:
@@ -83,7 +89,6 @@ Return ONLY a JSON array of objects:
     async def save_fact(self, user_id, fact_data):
         """
         Saves or Updates a fact. Implements Conflict Resolution & Merging.
-        fact_data: {type, value, confidence, importance}
         """
         content = fact_data['value']
         category = fact_data['type']
@@ -100,13 +105,12 @@ Return ONLY a JSON array of objects:
         is_update = False
         
         if existing['ids'][0]:
-            similarity = 1 - existing['distances'][0][0] # Using cosine space (1 - dist = similarity)
+            similarity = 1 - existing['distances'][0][0] 
             if similarity > 0.85: # High similarity -> Merge/Update
                 target_id = existing['ids'][0][0]
                 is_update = True
                 print(f"DEBUG: Merging/Updating existing fact for {category}: {target_id}")
             elif category in ['identity', 'goals']:
-                # Identity/Goals are usually singular, replace if not similar enough but same type
                 self.collection.delete(ids=existing['ids'][0])
                 print(f"DEBUG: Replacing different {category} fact.")
 
@@ -116,7 +120,7 @@ Return ONLY a JSON array of objects:
             "type": category,
             "confidence": fact_data['confidence'],
             "importance": fact_data['importance'],
-            "timestamp": "2024-03-18" # Or dynamic
+            "timestamp": "2024-03-21"
         }
 
         if is_update:
@@ -152,14 +156,12 @@ Return ONLY a JSON array of objects:
         if not results['documents'][0]:
             return "No matching memories found."
             
-        # Rank by (distance * importance * confidence) - simplified logic
         docs = results['documents'][0]
         metas = results['metadatas'][0]
         
         ranked_facts = []
         for i in range(len(docs)):
             metadata = metas[i]
-            # Handle old metadata structure (legacy from Phase 10)
             confidence = metadata.get('confidence', 1.0)
             fact_type = metadata.get('type') or metadata.get('category', 'fact')
             
