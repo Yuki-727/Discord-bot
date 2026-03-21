@@ -44,22 +44,22 @@ class AddressingDetector:
         ai_role = "NONE"
         ai_conf = 0.0
         
-        context_str = "\n".join([f"{m[1]}: {m[2]}" for m in recent_messages[-5:]]) if recent_messages else "[No previous context]"
-        prompt = f"""Analyze if Nia is the RECIPIENT of this message.
-CONTEXT:
+        context_str = "\n".join([f"{m[1]}: {m[2]}" for m in recent_messages[-5:]]) if recent_messages else "[No previous context - This is a fresh start]"
+        prompt = f"""Analyze Nia's role in this interaction.
+CONTEXT (Past few messages):
 {context_str}
 
-LATEST MESSAGE from {username}: "{text}"
+NEW MESSAGE from {username}: "{text}"
 
 Roles:
-- "TARGET": Speaking directly TO Nia (e.g., using her name, tags, or 'Nia, ...').
-- "TOPIC": Talking ABOUT Nia to someone else.
-- "CONTINUITY": Following up on a conversation Nia is already in (no names mentioned).
-- "NONE": Not related to Nia or a generic statement with no context.
+- "TARGET": Directly addressed to Nia (mentions her name, nicknames, or uses clear direct pronouns like 'cậu').
+- "TOPIC": Talking ABOUT Nia to a third party (not speaking TO her).
+- "CONTINUITY": Speaking TO Nia by following up on an ongoing exchange. This ONLY applies if there is CONTEXT above involving Nia.
+- "NONE": A generic statement or greeting not directed at Nia, or a fresh start where she isn't mentioned.
 
-If CONTEXT is "[No previous context]", roles like "CONTINUITY" are IMPOSSIBLE unless Nia's name is in the latest message.
+If CONTEXT is "[No previous context - This is a fresh start]", a message that doesn't mention Nia's name (like just "Hi" or "Chào") MUST be classified as "NONE".
 
-Return JSON: {{"role": "TARGET"|"TOPIC"|"CONTINUITY"|"NONE", "confidence": float}}
+Return JSON: {{"role": "TARGET"|"TOPIC"|"CONTINUITY"|"NONE", "explanation": "why", "confidence": float}}
 """
         try:
             raw = await ai_client.generate_response([{"role": "user", "content": prompt}])
@@ -70,10 +70,6 @@ Return JSON: {{"role": "TARGET"|"TOPIC"|"CONTINUITY"|"NONE", "confidence": float
             if start != -1 and end != -1:
                 data = json.loads(content[start:end+1])
                 ai_role, ai_conf = data.get('role', 'NONE'), data.get('confidence', 0.0)
-                
-                # Manual Override: Continuity requires at least one message in context
-                if not recent_messages and ai_role == "CONTINUITY":
-                    ai_role = "NONE"
         except: pass
 
         # AW (Addressing Weight)
